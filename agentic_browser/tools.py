@@ -169,17 +169,55 @@ class BrowserTools:
         Returns:
             ToolResult
         """
+        original_selector = selector
         selector = format_selector(selector)
         
-        if clear_first:
-            self.page.fill(selector, text)
-        else:
-            self.page.type(selector, text)
+        # Define fallback selectors for common search boxes
+        fallback_selectors = []
         
+        # If it looks like a Google search selector, add fallbacks
+        if "input" in selector.lower() or "search" in selector.lower() or "name='q'" in selector:
+            fallback_selectors = [
+                'textarea[name="q"]',  # Google's new textarea-based search
+                'input[name="q"]',
+                'input[aria-label="Search"]',
+                'textarea[aria-label="Search"]',
+                '[role="combobox"]',
+                'input[type="search"]',
+                'input[type="text"]',
+            ]
+        
+        # Try the primary selector first
+        selectors_to_try = [selector] + [s for s in fallback_selectors if s != selector]
+        
+        last_error = None
+        for sel in selectors_to_try:
+            try:
+                # First try to click the element to focus it
+                try:
+                    self.page.click(sel, timeout=3000)
+                    self.page.wait_for_timeout(200)
+                except:
+                    pass  # Click failed, still try to type
+                
+                if clear_first:
+                    self.page.fill(sel, text, timeout=5000)
+                else:
+                    self.page.type(sel, text, timeout=5000)
+                
+                return ToolResult(
+                    success=True,
+                    message=f"Typed into: {sel}" + (f" (fallback from {original_selector})" if sel != selector else ""),
+                    data={"chars_typed": len(text), "selector_used": sel},
+                )
+            except Exception as e:
+                last_error = e
+                continue
+        
+        # All selectors failed
         return ToolResult(
-            success=True,
-            message=f"Typed into: {selector}",
-            data={"chars_typed": len(text)},
+            success=False,
+            message=f"Could not type into any selector. Last error: {last_error}. Tried: {selectors_to_try[:3]}",
         )
     
     def press(self, key: str) -> ToolResult:
