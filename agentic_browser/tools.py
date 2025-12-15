@@ -354,35 +354,55 @@ class BrowserTools:
         Returns:
             ToolResult with visible text
         """
+        # Wait for page to be ready
+        try:
+            self.page.wait_for_load_state("domcontentloaded", timeout=3000)
+        except:
+            pass
+        
         # Get text content, excluding scripts and styles
         text = self.page.evaluate("""
             () => {
-                const walker = document.createTreeWalker(
-                    document.body,
-                    NodeFilter.SHOW_TEXT,
-                    {
-                        acceptNode: (node) => {
-                            const parent = node.parentElement;
-                            if (!parent) return NodeFilter.FILTER_REJECT;
-                            const tag = parent.tagName.toLowerCase();
-                            if (['script', 'style', 'noscript'].includes(tag)) {
-                                return NodeFilter.FILTER_REJECT;
-                            }
-                            const style = window.getComputedStyle(parent);
-                            if (style.display === 'none' || style.visibility === 'hidden') {
-                                return NodeFilter.FILTER_REJECT;
-                            }
-                            return NodeFilter.FILTER_ACCEPT;
-                        }
-                    }
-                );
-                
-                const texts = [];
-                while (walker.nextNode()) {
-                    const text = walker.currentNode.textContent.trim();
-                    if (text) texts.push(text);
+                // Safety check for document.body
+                if (!document.body) {
+                    return document.title || 'Page is loading...';
                 }
-                return texts.join(' ');
+                
+                try {
+                    const walker = document.createTreeWalker(
+                        document.body,
+                        NodeFilter.SHOW_TEXT,
+                        {
+                            acceptNode: (node) => {
+                                const parent = node.parentElement;
+                                if (!parent) return NodeFilter.FILTER_REJECT;
+                                const tag = parent.tagName.toLowerCase();
+                                if (['script', 'style', 'noscript'].includes(tag)) {
+                                    return NodeFilter.FILTER_REJECT;
+                                }
+                                try {
+                                    const style = window.getComputedStyle(parent);
+                                    if (style.display === 'none' || style.visibility === 'hidden') {
+                                        return NodeFilter.FILTER_REJECT;
+                                    }
+                                } catch (e) {
+                                    return NodeFilter.FILTER_ACCEPT;
+                                }
+                                return NodeFilter.FILTER_ACCEPT;
+                            }
+                        }
+                    );
+                    
+                    const texts = [];
+                    while (walker.nextNode()) {
+                        const text = walker.currentNode.textContent.trim();
+                        if (text) texts.push(text);
+                    }
+                    return texts.join(' ') || document.body.innerText || '';
+                } catch (e) {
+                    // Fallback to simple innerText
+                    return document.body.innerText || document.title || 'Unable to extract text';
+                }
             }
         """)
         
