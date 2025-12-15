@@ -229,10 +229,33 @@ class BrowserTools:
         Returns:
             ToolResult
         """
-        self.page.keyboard.press(key)
+        # Keys that might trigger navigation
+        navigation_keys = ["Enter", "Return"]
         
-        # Wait briefly for any updates
-        self.page.wait_for_timeout(500)
+        if key in navigation_keys:
+            # Use expect_navigation pattern for Enter key
+            try:
+                # Press and wait for potential navigation
+                self.page.keyboard.press(key)
+                
+                # Wait for any navigation to complete
+                try:
+                    self.page.wait_for_load_state("domcontentloaded", timeout=5000)
+                except:
+                    pass  # Page might not navigate, that's OK
+                
+                # Extra wait for dynamic content
+                self.page.wait_for_timeout(1000)
+                
+            except Exception as e:
+                # Even if there's an error, the key was pressed
+                return ToolResult(
+                    success=True,
+                    message=f"Pressed: {key} (page may have navigated)",
+                )
+        else:
+            self.page.keyboard.press(key)
+            self.page.wait_for_timeout(300)
         
         return ToolResult(
             success=True,
