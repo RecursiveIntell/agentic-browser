@@ -201,19 +201,23 @@ What is your next action? Respond with JSON only."""
     
     def chat_completion(
         self, 
-        messages: list[dict[str, str]]
+        messages: list[dict[str, str]],
+        max_retries: int = 3,
     ) -> str:
-        """Send a chat completion request to the LLM.
+        """Send a chat completion request to the LLM with retry logic.
         
         Args:
             messages: List of chat messages
+            max_retries: Maximum retries on rate limit errors
             
         Returns:
             The assistant's response content
             
         Raises:
-            httpx.HTTPError: On network errors
+            httpx.HTTPError: On network errors after retries exhausted
         """
+        import time
+        
         url = f"{self.endpoint}/chat/completions"
         
         payload = {
@@ -223,11 +227,35 @@ What is your next action? Respond with JSON only."""
             "max_tokens": 1000,
         }
         
-        response = self.client.post(url, json=payload, headers=self.headers)
-        response.raise_for_status()
+        last_error = None
+        for attempt in range(max_retries + 1):
+            try:
+                # Add delay between requests to avoid rate limiting
+                if attempt > 0:
+                    # Exponential backoff: 2s, 4s, 8s
+                    wait_time = 2 ** (attempt + 1)
+                    time.sleep(wait_time)
+                
+                response = self.client.post(url, json=payload, headers=self.headers)
+                response.raise_for_status()
+                
+                data = response.json()
+                return data["choices"][0]["message"]["content"]
+                
+            except httpx.HTTPStatusError as e:
+                last_error = e
+                if e.response.status_code == 429:
+                    # Rate limited - wait and retry
+                    if attempt < max_retries:
+                        continue
+                raise
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries:
+                    continue
+                raise
         
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
+        raise last_error
     
     def get_next_action(
         self, 
