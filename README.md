@@ -24,7 +24,7 @@ A Linux-first agentic browser runner that controls Chromium via Playwright and e
 
 ```bash
 # Clone the repository
-git clone https://github.com/sikmindz/agentic-browser.git
+git clone https://github.com/RecursiveIntell/agentic-browser.git
 cd agentic-browser
 
 # Create virtual environment
