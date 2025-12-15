@@ -71,6 +71,13 @@ Action argument rules:
 - back/forward: {}
 - done: { "summary_style": "bullets|paragraph" }
 
+IMPORTANT WORKFLOW PATTERNS:
+1. SEARCH: After typing in a search box, you MUST use press with key "Enter" to submit
+   - First: type the search query
+   - Then: press Enter to submit
+2. FORMS: After filling form fields, click the submit button
+3. NEVER repeat the same action twice - always progress to the next step
+
 Selector tips:
 - Use text= selectors for visible text: text="Click Me"
 - Use CSS selectors for elements with IDs/classes
