@@ -153,6 +153,10 @@ The required format is:
             {"role": "system", "content": self.SYSTEM_PROMPT}
         ]
         
+        # Format visited URLs for context
+        visited_urls = state.get('visited_urls', [])
+        visited_str = "\n".join(f"- {url}" for url in visited_urls[-10:]) if visited_urls else "(none yet)"
+        
         # Format the state as a user message
         state_text = f"""Current Page State:
 - Goal: {state.get('goal', '')}
@@ -164,6 +168,9 @@ Visible Text (truncated):
 
 Top Links:
 {self._format_links(state.get('top_links', []))}
+
+⚠️ ALREADY VISITED URLs (do NOT click these again):
+{visited_str}
 
 Recent Actions:
 {self._format_history(state.get('recent_history', []))}

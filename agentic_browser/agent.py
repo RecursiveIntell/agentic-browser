@@ -30,7 +30,12 @@ class PageState:
     top_links: list[dict[str, str]]
     recent_history: list[dict[str, Any]]
     extracted_data: dict[str, Any]
+    visited_urls: list[str] = None  # URLs already visited
     additional_context: str = ""
+    
+    def __post_init__(self):
+        if self.visited_urls is None:
+            self.visited_urls = []
     
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for LLM."""
@@ -42,6 +47,7 @@ class PageState:
             "top_links": self.top_links,
             "recent_history": self.recent_history,
             "extracted_data": self.extracted_data,
+            "visited_urls": self.visited_urls,
             "additional_context": self.additional_context,
         }
 
@@ -82,6 +88,7 @@ class BrowserAgent:
         self._history: list[dict[str, Any]] = []
         self._extracted_data: dict[str, Any] = {}
         self._action_counts: dict[str, int] = {}  # For loop detection
+        self._visited_urls: list[str] = []  # Track visited URLs to avoid revisiting
         
     def run(self) -> AgentResult:
         """Run the agent to accomplish the goal.
@@ -353,14 +360,20 @@ class BrowserAgent:
             max_links=self.config.max_links,
         )
         
+        # Track current URL as visited
+        current_url = page_state["current_url"]
+        if current_url and current_url not in self._visited_urls:
+            self._visited_urls.append(current_url)
+        
         return PageState(
             goal=self.config.goal,
-            current_url=page_state["current_url"],
+            current_url=current_url,
             page_title=page_state["page_title"],
             visible_text=page_state["visible_text"],
             top_links=page_state["top_links"],
             recent_history=self._get_recent_history(),
             extracted_data=self._extracted_data,
+            visited_urls=self._visited_urls.copy(),
         )
     
     def _get_recent_history(self) -> list[dict[str, Any]]:
