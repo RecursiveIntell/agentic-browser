@@ -311,8 +311,19 @@ class BrowserAgent:
                 
                 # Handle failures
                 if not result.success:
-                    # Try recovery
-                    state.additional_context = f"Previous action failed: {result.message}"
+                    # Give LLM strong guidance to try a different approach
+                    failed_action = action_response.action
+                    failed_selector = action_response.args.get("selector", "unknown")
+                    state.additional_context = (
+                        f"⚠️ PREVIOUS ACTION FAILED: {failed_action}\n"
+                        f"Failed selector: {failed_selector}\n"
+                        f"Error: {result.message}\n\n"
+                        f"YOU MUST TRY A DIFFERENT APPROACH:\n"
+                        f"- Use a simpler text-based selector like text=\"Link Text\"\n"
+                        f"- Try clicking a different element\n"
+                        f"- Or use 'done' if you can answer from the visible text\n"
+                        f"DO NOT repeat the same failing action!"
+                    )
                     # Take a screenshot for debugging
                     self._tools.screenshot("error_recovery")
                     
