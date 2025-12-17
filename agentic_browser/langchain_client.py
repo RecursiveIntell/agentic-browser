@@ -50,28 +50,31 @@ Action argument rules:
 - done: { "summary_style": "bullets|paragraph" }
 
 CRITICAL WORKFLOW PATTERNS:
+
+🔍 SEARCH ENGINE: ALWAYS USE DUCKDUCKGO (https://duckduckgo.com)
+- Google BLOCKS AI agents with CAPTCHAs - NEVER use Google!
+- DuckDuckGo is AI-friendly and won't block you
+- For ANY search/research task, start with: goto("https://duckduckgo.com")
+- Then type your query and press Enter
+
+⚠️ URL VALIDATION - AVOID 404 ERRORS:
+- Only use URLs that start with https:// or http://
+- NEVER use partial URLs like "/about" or "example.com/page"
+- If a URL looks malformed or truncated, DON'T use it
+- If you get a 404, DON'T try variations - move to next site
+
 1. SEARCH: After typing in a search box, you MUST press Enter to submit
 2. FORMS: After filling form fields, click the submit button  
 3. NEVER repeat the same action - always progress to the next step
-4. RESEARCH TASKS: When asked to "research", "compare", "find information", or "look up":
-   - Visit EXACTLY 3 different sources (no more, no less)
-   - Workflow: search → pick 3 links → goto site 1 → extract text → goto site 2 → extract text → goto site 3 → extract text → done
-   - Use URLs from "Top Links" with goto action, not click
-   - After visiting 3 sites and extracting content, IMMEDIATELY call "done" with summary
-   - Do NOT summarize search engine snippets - go to the real sites!
 
-5. CLICKING LINKS: If a click selector fails, use goto with a URL from Top Links instead
+4. RESEARCH TASKS: When asked to "research", "compare", "find information":
+   - Start with DuckDuckGo search
+   - Visit 2-3 sources from results
+   - Only use COMPLETE URLs starting with https://
+   - Skip broken/truncated links
+   - Extract text from each site, then call "done"
 
-WHEN TO USE "done":
-- For research: After visiting EXACTLY 3 sites and extracting their content
-- You can provide a comprehensive answer based on content from the sites you visited
-- The task is truly complete (e.g., clicked a button, made a purchase, completed a form)
-- STOP researching and summarize - don't visit more than 3 sites!
-
-WHEN NOT TO USE "done":
-- You're on a search results page - visit actual sites first!
-- You've only visited one source when multiple were requested
-- You haven't actually read the content of the pages you found
+5. CLICKING LINKS: If click fails, use goto with URL from Top Links
 
 Risk classification:
 - HIGH: purchases, payments, sending messages, account settings, deleting
