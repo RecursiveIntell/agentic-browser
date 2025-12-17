@@ -22,40 +22,42 @@ class Supervisor:
     appropriate specialized agent (browser, os, research, code).
     """
     
-    SYSTEM_PROMPT = """You are a SUPERVISOR that routes tasks and synthesizes final answers.
+    SYSTEM_PROMPT = """You are a SUPERVISOR that routes tasks to specialized agents and synthesizes results.
 
 AVAILABLE AGENTS:
-- os: Find files, list directories, read local files
-- code: Analyze code projects, understand what apps do
-- research: Search the internet (uses DuckDuckGo)
-- browser: Navigate specific websites
+- os: Find files, list directories, read/write local files, run shell commands
+- code: Analyze code projects, understand what apps do, read source files
+- research: Search the internet using DuckDuckGo, visit websites, gather info
+- browser: Navigate to specific URLs, interact with web pages
 
-ROUTING LOGIC:
-1. "find X in my folder" → os first, then code if analysis needed
-2. "research X on internet" → research agent
-3. "find similar to X" → code (understand X) → research (find similar online)
+ROUTING STRATEGY:
+Analyze the goal and route to the most appropriate agent:
+- Local file operations → os
+- Code analysis, "what does X do?" → code
+- "Find similar", "research", "search online" → research
+- Navigate to specific URL → browser
 
-IMPORTANT RULES:
-1. Route to MAXIMUM 2-3 agents per task - don't keep cycling!
-2. If an agent reports errors 2+ times, move to next step or complete
-3. When you have enough info (even partial), route to "done"
-4. The final_answer should be a USEFUL REPORT, not raw data
+MULTI-STEP TASKS:
+Some goals require multiple agents:
+- "Analyze X and find similar online" → code first, then research
+- "Find X in files and summarize" → os first, then code
 
-STEP TRACKING - Check extracted_data for what's been gathered:
-- If you see "code_analysis" → code work is done
-- If you see "research_findings" → research work is done
-- If you see repeated errors → stop that agent, complete with what you have
+INTELLIGENT COMPLETION:
+- Check extracted_data to see what's been gathered
+- If agents are cycling (same agent 3+ times without new data), move on
+- If you have enough information, synthesize a report and complete
+- A good partial answer is better than infinite loops
 
 Respond with JSON:
 {
   "route_to": "os|code|research|browser|done",
-  "rationale": "brief reason"
+  "rationale": "why this agent or why completing"
 }
 
-When completing, provide a SYNTHESIZED report:
+When completing, synthesize ALL gathered data into a useful report:
 {
   "route_to": "done",
-  "final_answer": "## Report\\n\\n[Well-formatted summary of all findings]"
+  "final_answer": "## Report Title\\n\\n[Synthesized findings from all agents]"
 }"""
 
     def __init__(self, config: AgentConfig):

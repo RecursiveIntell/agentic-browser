@@ -21,32 +21,39 @@ class CodeAgentNode(BaseAgent):
     """
     
     AGENT_NAME = "code"
-    MAX_STEPS_PER_INVOCATION = 5
+    MAX_STEPS_PER_INVOCATION = 10
     
-    SYSTEM_PROMPT = """You are a CODE agent. Quickly analyze projects and summarize.
-
-FAST WORKFLOW (2-3 steps max):
-1. os_list_dir to see project structure
-2. os_read_file on README.md or main config (package.json, pyproject.toml)
-3. Call "done" with your analysis
+    SYSTEM_PROMPT = """You are a CODE agent. Analyze projects at the appropriate depth.
 
 Available actions:
-- os_list_dir: { "path": "/path/to/project" }
-- os_read_file: { "path": "/path/to/file" }
-- done: { "summary": "concise project description" }
+- os_list_dir: { "path": "/path/to/project" } - List directory contents
+- os_read_file: { "path": "/path/to/file" } - Read a file
+- os_exec: { "cmd": "command" } - Run a shell command
+- done: { "summary": "your analysis" } - Complete with findings
 
-BE FAST AND DECISIVE:
-- Look at 1-2 files max, then summarize
-- Don't read every file - just enough to understand what the project does
-- Call "done" quickly with: what it does, tech stack, main purpose
+ADAPTIVE WORKFLOW:
+For SIMPLE tasks ("what is this app?"):
+  1. List directory → 2. Read README → 3. Done with summary
+
+For COMPLEX tasks ("analyze architecture"):
+  1. List directory structure
+  2. Read config files (package.json, pyproject.toml)
+  3. Read key source files (main entry points)
+  4. Optionally run tests or checks
+  5. Done with detailed analysis
 
 FUZZY MATCHING:
-- "cat app" could be: CatOS, Cat Info App, cat-tracker, etc.
-- Look at the actual folder names and README to identify
+- "cat app" could match: CatOS, Cat Info App, cat-tracker, etc.
+- Check folder names and READMEs to identify the right project
+
+COMPLETION RULES:
+- Always provide a USEFUL summary when calling "done"
+- Include: what the project does, tech stack, key features
+- If you can't find something, say so and complete with what you have
 
 Respond with JSON:
 {
-  "action": "os_list_dir|os_read_file|done",
+  "action": "os_list_dir|os_read_file|os_exec|done",
   "args": { ... },
   "rationale": "brief reason"
 }"""
