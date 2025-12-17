@@ -233,12 +233,13 @@ def run_graph_command(args: argparse.Namespace, config: AgentConfig, console: Co
     
     # Initialize tools
     os_tools = OSTools(config)
-    browser_tools = None  # Will be initialized when browser is needed
+    browser_tools = BrowserTools(config)  # Initialize browser tools for research/browser agents
     
     # Create runner with checkpointing (tools stored in registry, not state)
     runner = MultiAgentRunner(
         config=config,
         os_tools=os_tools,
+        browser_tools=browser_tools,
         enable_checkpointing=True,
     )
     
