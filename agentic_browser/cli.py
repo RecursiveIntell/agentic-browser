@@ -131,6 +131,20 @@ Examples:
         help="Use IPC mode for approval (for GUI subprocess)",
     )
     
+    run_parser.add_argument(
+        "--use-graph",
+        action="store_true",
+        default=False,
+        help="Use new LangGraph multi-agent architecture",
+    )
+    
+    run_parser.add_argument(
+        "--langsmith",
+        action="store_true",
+        default=False,
+        help="Enable LangSmith tracing (requires LANGCHAIN_API_KEY)",
+    )
+    
     # GUI command
     gui_parser = subparsers.add_parser(
         "gui",
@@ -167,7 +181,11 @@ def run_command(args: argparse.Namespace) -> int:
     )
     
     try:
-        # Run the agent
+        # Check if using new LangGraph architecture
+        if getattr(args, 'use_graph', False):
+            return run_graph_command(args, config, console)
+        
+        # Legacy agent mode
         result = run_agent(config)
         
         # Print final status
@@ -186,6 +204,84 @@ def run_command(args: argparse.Namespace) -> int:
         return 130
     except Exception as e:
         console.print(f"[bold red]Fatal error: {e}[/bold red]")
+        return 1
+
+
+def run_graph_command(args: argparse.Namespace, config: AgentConfig, console: Console) -> int:
+    """Execute using LangGraph multi-agent architecture.
+    
+    Args:
+        args: Parsed arguments
+        config: Agent configuration
+        console: Rich console for output
+        
+    Returns:
+        Exit code
+    """
+    from .graph import MultiAgentRunner, configure_tracing
+    from .tools import BrowserTools
+    from .os_tools import OSTools
+    
+    # Enable LangSmith tracing if requested
+    if getattr(args, 'langsmith', False):
+        configure_tracing(enabled=True)
+    
+    console.print("[bold cyan]🔄 Using LangGraph multi-agent architecture[/bold cyan]")
+    console.print(f"[dim]Goal: {config.goal}[/dim]")
+    console.print()
+    
+    # Initialize tools
+    os_tools = OSTools(config)
+    browser_tools = None  # Will be initialized when browser is needed
+    
+    # Create runner
+    runner = MultiAgentRunner(
+        config=config,
+        os_tools=os_tools,
+        enable_checkpointing=True,
+    )
+    
+    try:
+        # Stream execution for real-time output
+        console.print("[bold]Starting multi-agent execution...[/bold]")
+        console.print()
+        
+        for event in runner.stream(config.goal, config.max_steps):
+            # Display agent activity
+            for node_name, state_update in event.items():
+                if node_name == "supervisor":
+                    domain = state_update.get("current_domain", "")
+                    console.print(f"[cyan]Supervisor[/cyan] → routing to [yellow]{domain}[/yellow]")
+                else:
+                    step = state_update.get("step_count", 0)
+                    console.print(f"  [dim]Step {step}:[/dim] [green]{node_name}[/green] agent active")
+                
+                # Check for completion
+                if state_update.get("task_complete"):
+                    console.print()
+                    console.print("[bold green]✓ Task completed![/bold green]")
+                    answer = state_update.get("final_answer", "")
+                    if answer:
+                        console.print()
+                        console.print("[bold]Final Answer:[/bold]")
+                        console.print(answer)
+                    return 0
+                
+                # Check for error
+                error = state_update.get("error")
+                if error:
+                    console.print(f"[red]Error: {error}[/red]")
+        
+        console.print("\n[yellow]Execution ended (no explicit completion)[/yellow]")
+        return 1
+        
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Interrupted by user[/yellow]")
+        return 130
+    except Exception as e:
+        console.print(f"[bold red]Graph execution error: {e}[/bold red]")
+        import traceback
+        traceback.print_exc()
         return 1
 
 
