@@ -48,7 +48,8 @@ CRITICAL RULES:
 2. PROJECT VALIDATION:
    - Check if the files in "." match the user's request.
    - If User asks for "Cat App" but you see "Agentic Browser" code -> WRONG DIRECTORY.
-   - ACTION: Search for it: { "action": "os_exec", "args": { "cmd": "find ~ -iname '*cat*' -type d -maxdepth 4 2>/dev/null" } }
+   - ACTION: Search nearby: 
+     { "action": "os_exec", "args": { "cmd": "find .. -name '*cat*' -type d -maxdepth 3" } }
    - Then listing the CORRECT directory.
 3. Do not guess paths! Use "os_exec find ..." if you are lost.
 4. "os_list_dir" output is in your HISTORY. Do not re-list same dir repeatedly.
