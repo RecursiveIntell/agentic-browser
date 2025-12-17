@@ -127,7 +127,14 @@ Your task: {state['goal']}
             extracted = None
             if action_data.get("action") == "extract_visible_text" and result.success:
                 key = f"browser_extract_{len(state['extracted_data'])}"
-                extracted = {key: result.data or result.message[:500]}
+                
+                content_str = ""
+                if isinstance(result.data, dict):
+                    content_str = result.data.get("text", str(result.data))
+                else:
+                    content_str = str(result.data) if result.data else str(result.message)
+                    
+                extracted = {key: content_str[:2000]}
                 
             # Create tool output message so agent knows result
             tool_content = str(result.message) if result.message else "Action successful"

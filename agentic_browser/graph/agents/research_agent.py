@@ -184,7 +184,14 @@ Data collected:
             extracted = None
             if action_data.get("action") == "extract_visible_text" and result.success:
                 key = f"research_source_{sources_visited + 1}"
-                extracted = {key: result.data[:1000] if result.data else result.message[:500]}
+                # content might be dict {"text": "..."} or string
+                content_str = ""
+                if isinstance(result.data, dict):
+                    content_str = result.data.get("text", str(result.data))
+                else:
+                    content_str = str(result.data) if result.data else str(result.message)
+                
+                extracted = {key: content_str[:2000]} # Increased capture size
             
             # Create tool output message
             tool_content = "Action successful."
