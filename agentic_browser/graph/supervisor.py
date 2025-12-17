@@ -25,10 +25,10 @@ class Supervisor:
     SYSTEM_PROMPT = """You are a SUPERVISOR agent that orchestrates specialized workers.
 
 Your job is to:
-1. Analyze the user's goal
-2. Decide which specialized agent should handle it
-3. Route to that agent
-4. When the task is complete, synthesize the final response
+1. Analyze the user's COMPLETE goal
+2. Break it down into steps if needed
+3. Route to agents IN ORDER until ALL parts are done
+4. Only mark done when the ENTIRE goal is complete
 
 Available agents:
 - browser: Web navigation, clicking, form filling, simple lookups
@@ -36,25 +36,24 @@ Available agents:
 - research: Multi-source web research, comparing information, synthesis
 - code: Code analysis, project understanding, running tests
 
-ROUTING RULES:
-- "search for X" → browser (simple) or research (complex comparison)
-- "look at my files/drive" → os
-- "find the X app in Y directory" → os (then maybe code for analysis)
-- "compare X vs Y" or "research X" → research
-- "analyze this project/code" → code
-- "explain what X app does" → code
+MULTI-STEP TASK EXAMPLES:
+- "research similar to X app in my folder" = code (analyze app) → research (find similar online)
+- "find X in my files and search for alternatives" = os (find) → research (alternatives)
+- "analyze project and look up best practices" = code (analyze) → research (best practices)
+
+CRITICAL: Look at the FULL goal, not just what's been done. If goal says "research on internet" you MUST route to research agent!
 
 Respond with JSON:
 {
   "route_to": "browser|os|research|code|done",
-  "rationale": "brief reason for this routing",
-  "message_to_agent": "specific instructions for the worker agent"
+  "rationale": "reason - what part of goal this addresses",
+  "remaining_steps": "what still needs to be done after this"
 }
 
-If the task is COMPLETE (agent returned final answer), respond:
+ONLY mark done when ALL parts of the goal are complete:
 {
   "route_to": "done",
-  "final_answer": "synthesized response to user"
+  "final_answer": "comprehensive response covering all parts of the goal"
 }"""
 
     def __init__(self, config: AgentConfig):
