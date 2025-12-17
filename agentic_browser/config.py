@@ -5,6 +5,7 @@ Provides configuration dataclass and environment variable loading.
 """
 
 import os
+import shutil
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -85,12 +86,54 @@ class AgentConfig:
     # Use LangChain for conversation memory
     use_langchain: bool = True  # Default to using LangChain
     
+    # GUI IPC mode for approval dialogs
+    gui_ipc: bool = False
+    
+    # Domain routing settings
+    routing_mode: str = "auto"  # auto | browser | os | ask
+    
+    # OS agent LLM settings (optional, falls back to main model settings)
+    os_model_endpoint: Optional[str] = field(
+        default_factory=lambda: os.getenv("AGENTIC_OS_ENDPOINT")
+    )
+    os_model: Optional[str] = field(
+        default_factory=lambda: os.getenv("AGENTIC_OS_MODEL")
+    )
+    os_api_key: Optional[str] = field(
+        default_factory=lambda: os.getenv("AGENTIC_OS_API_KEY")
+    )
+    
+    # OS safety settings
+    os_sandbox_dir: Path = field(
+        default_factory=lambda: Path.home() / "agentic_sandbox"
+    )
+    os_allow_outside_home: bool = False
+    
+    def __post_init__(self):
+        """Initialize internal state."""
+        # Cache for temp profile directory (when no_persist=True)
+        self._cached_profile_dir: Optional[Path] = None
+    
     @property
     def profile_dir(self) -> Path:
-        """Get the path to the browser profile directory."""
+        """Get the path to the browser profile directory.
+        
+        When no_persist=True, creates a temp directory once and caches it.
+        """
         if self.no_persist:
-            return Path(tempfile.mkdtemp(prefix="agentic_browser_"))
+            if self._cached_profile_dir is None:
+                self._cached_profile_dir = Path(tempfile.mkdtemp(prefix="agentic_browser_"))
+            return self._cached_profile_dir
         return get_profiles_dir() / self.profile_name
+    
+    def cleanup_profile_dir(self) -> None:
+        """Clean up temp profile directory if no_persist=True.
+        
+        Should be called at end of run to remove temp files.
+        """
+        if self.no_persist and self._cached_profile_dir and self._cached_profile_dir.exists():
+            shutil.rmtree(self._cached_profile_dir, ignore_errors=True)
+            self._cached_profile_dir = None
     
     def ensure_directories(self) -> None:
         """Ensure all required directories exist."""
@@ -114,26 +157,22 @@ class AgentConfig:
         fresh_profile: bool = False,
         no_persist: bool = False,
         enable_tracing: bool = False,
+        gui_ipc: bool = False,
     ) -> "AgentConfig":
         """Create configuration from CLI arguments."""
-        config = cls(
+        return cls(
             goal=goal,
             profile_name=profile,
-            headless=headless,
-            max_steps=max_steps,
-            auto_approve=auto_approve,
             fresh_profile=fresh_profile,
             no_persist=no_persist,
+            headless=headless,
+            max_steps=max_steps,
+            model_endpoint=model_endpoint or DEFAULTS["model_endpoint"],
+            model=model or DEFAULTS["model"],
+            auto_approve=auto_approve,
             enable_tracing=enable_tracing,
+            gui_ipc=gui_ipc,
         )
-        
-        # Override with CLI args if provided
-        if model_endpoint:
-            config.model_endpoint = model_endpoint
-        if model:
-            config.model = model
-            
-        return config
 
 
 # Default configuration values for documentation

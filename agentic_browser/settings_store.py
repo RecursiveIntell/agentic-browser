@@ -23,11 +23,18 @@ def get_settings_path() -> Path:
 class Settings:
     """Application settings."""
     
-    # Provider settings
+    # Provider settings (browser domain)
     provider: str = "lm_studio"
     api_key: Optional[str] = None
     model: Optional[str] = None
     custom_endpoint: Optional[str] = None
+    
+    # OS domain provider settings
+    routing_mode: str = "auto"  # auto | browser | os | ask
+    os_provider: str = "lm_studio"
+    os_api_key: Optional[str] = None
+    os_model: Optional[str] = None
+    os_custom_endpoint: Optional[str] = None
     
     # Browser settings
     profile_name: str = "default"
@@ -101,10 +108,18 @@ class SettingsStore:
             with self._file_lock:
                 data = json.loads(path.read_text())
                 self._settings = Settings(
+                    # Browser domain settings
                     provider=data.get("provider", "lm_studio"),
                     api_key=data.get("api_key"),
                     model=data.get("model"),
                     custom_endpoint=data.get("custom_endpoint"),
+                    # OS domain settings
+                    routing_mode=data.get("routing_mode", "auto"),
+                    os_provider=data.get("os_provider", "lm_studio"),
+                    os_api_key=data.get("os_api_key"),
+                    os_model=data.get("os_model"),
+                    os_custom_endpoint=data.get("os_custom_endpoint"),
+                    # Other settings
                     profile_name=data.get("profile_name", "default"),
                     headless=data.get("headless", False),
                     max_steps=data.get("max_steps", 30),
@@ -122,10 +137,18 @@ class SettingsStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         
         data = {
+            # Browser domain settings
             "provider": self._settings.provider,
             "api_key": self._settings.api_key,
             "model": self._settings.model,
             "custom_endpoint": self._settings.custom_endpoint,
+            # OS domain settings
+            "routing_mode": self._settings.routing_mode,
+            "os_provider": self._settings.os_provider,
+            "os_api_key": self._settings.os_api_key,
+            "os_model": self._settings.os_model,
+            "os_custom_endpoint": self._settings.os_custom_endpoint,
+            # Other settings
             "profile_name": self._settings.profile_name,
             "headless": self._settings.headless,
             "max_steps": self._settings.max_steps,

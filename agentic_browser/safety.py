@@ -58,6 +58,30 @@ class SafetyClassifier:
         "post", "comment", "publish",
     }
     
+    # OS high-risk command patterns (require double-confirm)
+    OS_HIGH_RISK_PATTERNS = [
+        r"\brm\s+(-[rf]+\s+)*[^\s]+",  # rm with flags
+        r"\bdd\b",                      # disk destroyer
+        r"\bmkfs\b",                    # make filesystem
+        r"\bsudo\b",                    # privilege escalation
+        r"\bpkexec\b",                  # polkit escalation  
+        r"\bsu\s",                      # switch user
+        r"\bchmod\s+-R\b",              # recursive permissions
+        r"\bchown\s+-R\b",              # recursive ownership
+        r"\b(shutdown|reboot|poweroff)\b",  # system power
+        r"\bsystemctl\s+(stop|disable|mask)\b",  # dangerous systemctl
+        r">>\s*/etc/",                  # append to /etc
+        r">\s*/etc/",                   # overwrite /etc
+        r"\bkill\s+-9\b",               # force kill
+        r"\bkillall\b",                 # kill all processes
+    ]
+    
+    # OS high-risk paths
+    OS_HIGH_RISK_PATHS = [
+        "/etc", "/usr", "/bin", "/sbin", "/boot", 
+        "/var", "/lib", "/lib64", "/opt", "/root",
+    ]
+    
     def classify_action(
         self,
         action: str,
@@ -68,15 +92,19 @@ class SafetyClassifier:
         """Classify the risk level of an action.
         
         Args:
-            action: The action type (click, type, etc.)
+            action: The action type (click, type, os_exec, etc.)
             args: Action arguments
-            current_url: Current page URL
+            current_url: Current page URL (for browser actions)
             page_content: Current page visible text (optional)
             
         Returns:
             Risk level classification
         """
-        # Check URL-based risks first
+        # Handle OS actions
+        if action.startswith("os_"):
+            return self._classify_os_action(action, args)
+        
+        # Check URL-based risks first (browser actions)
         if is_payment_domain(current_url):
             return RiskLevel.HIGH
         
@@ -98,6 +126,113 @@ class SafetyClassifier:
         
         # Default: low risk for navigation/extraction actions
         return RiskLevel.LOW
+    
+    def _classify_os_action(
+        self,
+        action: str,
+        args: dict[str, Any],
+    ) -> RiskLevel:
+        """Classify the risk level of an OS action.
+        
+        Args:
+            action: The OS action type
+            args: Action arguments
+            
+        Returns:
+            Risk level classification
+        """
+        import re
+        from pathlib import Path
+        
+        if action == "os_exec":
+            cmd = args.get("cmd", "")
+            
+            # Check high-risk patterns
+            for pattern in self.OS_HIGH_RISK_PATTERNS:
+                if re.search(pattern, cmd, re.IGNORECASE):
+                    return RiskLevel.HIGH
+            
+            # Writing/modifying commands are medium risk
+            if any(op in cmd.lower() for op in [
+                "mv ", "cp ", "rm ", ">", "tee ", "sed -i", 
+                "chmod ", "chown ", "mkdir ", "touch ", "ln "
+            ]):
+                return RiskLevel.MEDIUM
+            
+            # Read-only commands are low risk
+            return RiskLevel.LOW
+        
+        elif action == "os_write_file":
+            path_str = args.get("path", "")
+            path = Path(path_str).expanduser().resolve()
+            home = Path.home()
+            
+            # Check high-risk paths
+            for risk_path in self.OS_HIGH_RISK_PATHS:
+                if str(path).startswith(risk_path):
+                    return RiskLevel.HIGH
+            
+            # Writing outside home is high risk
+            if not str(path).startswith(str(home)):
+                return RiskLevel.HIGH
+            
+            return RiskLevel.MEDIUM
+        
+        elif action == "os_read_file":
+            # Reading sensitive files is medium risk
+            path_str = args.get("path", "")
+            if any(sensitive in path_str.lower() for sensitive in [
+                "/etc/shadow", "/etc/passwd", ".ssh/", "id_rsa", ".gnupg/",
+                ".aws/", ".netrc", ".npmrc", "credentials"
+            ]):
+                return RiskLevel.MEDIUM
+            return RiskLevel.LOW
+        
+        elif action == "os_list_dir":
+            return RiskLevel.LOW
+        
+        return RiskLevel.LOW
+    
+    def requires_double_confirm(
+        self,
+        action: str,
+        args: dict[str, Any],
+    ) -> tuple[bool, str]:
+        """Check if an action requires double confirmation.
+        
+        Double confirmation is required for destructive OS operations.
+        
+        Args:
+            action: The action type
+            args: Action arguments
+            
+        Returns:
+            Tuple of (requires_double_confirm, reason)
+        """
+        import re
+        
+        if action != "os_exec":
+            # Only os_exec commands can require double-confirm
+            return False, ""
+        
+        cmd = args.get("cmd", "")
+        
+        # Check against dangerous patterns
+        dangerous_reasons = {
+            r"\brm\s+(-[rf]+\s+)*[^\s]+": "Recursive/forced file deletion",
+            r"\bdd\b": "Direct disk access (can destroy data)",
+            r"\bmkfs\b": "Filesystem creation (erases disk)",
+            r"\bsudo\b": "Privilege escalation",
+            r"\b(shutdown|reboot|poweroff)\b": "System power operation",
+            r"\bkill\s+-9\b": "Forced process termination",
+            r"\bkillall\b": "Killing multiple processes",
+        }
+        
+        for pattern, reason in dangerous_reasons.items():
+            if re.search(pattern, cmd, re.IGNORECASE):
+                return True, reason
+        
+        return False, ""
     
     def _classify_click(
         self, 

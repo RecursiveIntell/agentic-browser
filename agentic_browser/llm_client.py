@@ -20,7 +20,7 @@ class ActionResponse(BaseModel):
     
     action: str = Field(
         description="The action to take",
-        pattern=r"^(goto|click|type|press|scroll|wait_for|extract|extract_visible_text|screenshot|back|forward|done)$"
+        pattern=r"^(goto|click|type|press|scroll|wait_for|extract|extract_visible_text|screenshot|back|forward|done|os_exec|os_list_dir|os_read_file|os_write_file)$"
     )
     args: dict[str, Any] = Field(default_factory=dict, description="Action arguments")
     rationale: str = Field(description="Short reason for this action")
@@ -50,7 +50,7 @@ CRITICAL: You MUST respond with ONLY valid JSON, no markdown, no prose, no expla
 
 Your response must follow this exact schema:
 {
-  "action": "goto|click|type|press|scroll|wait_for|extract|extract_visible_text|screenshot|back|forward|done",
+  "action": "goto|click|type|press|scroll|wait_for|extract|extract_visible_text|screenshot|back|forward|done|os_exec|os_list_dir|os_read_file|os_write_file",
   "args": { ... },
   "rationale": "short reason for this action",
   "risk": "low|medium|high",
@@ -71,31 +71,107 @@ Action argument rules:
 - back/forward: {}
 - done: { "summary_style": "bullets|paragraph" }
 
+OS Action argument rules:
+- os_exec: { "cmd": "command string", "timeout_s": 30, "cwd": "/optional/path" }
+- os_list_dir: { "path": "/path/to/dir" }
+- os_read_file: { "path": "/path/to/file", "max_bytes": 10000 }
+- os_write_file: { "path": "/path/to/file", "content": "...", "mode": "overwrite|append" }
+
 CRITICAL WORKFLOW PATTERNS:
 1. SEARCH: After typing in a search box, you MUST press Enter to submit
 2. FORMS: After filling form fields, click the submit button  
 3. NEVER repeat the same action - always progress to the next step
-4. COMPLETION: Once you have the information needed to answer the goal:
-   - Use action="done" IMMEDIATELY
-   - Put your complete answer in "final_answer"
-   - Do NOT keep extracting or navigating - just finish!
+4. RESEARCH TASKS: When asked to "research", "compare", "find information", or "look up":
+   - Visit EXACTLY 3 different sources (no more, no less)
+   - Workflow: search → pick 3 links → goto site 1 → extract text → goto site 2 → extract text → goto site 3 → extract text → done
+   - Use URLs from "Top Links" with goto action, not click
+   - After visiting 3 sites and extracting content, IMMEDIATELY call "done" with summary
+   - Do NOT summarize search engine snippets - go to the real sites!
+
+5. CLICKING LINKS: If a click selector fails, use goto with a URL from Top Links instead
 
 WHEN TO USE "done":
-- You have read/extracted the information the user asked for
-- You can answer the user's question from the visible text
-- The task is complete (e.g., clicked a button, filled a form)
-- There's nothing more to do
+- For research: After visiting EXACTLY 3 sites and extracting their content
+- You can provide a comprehensive answer based on content from the sites you visited
+- The task is truly complete (e.g., clicked a button, made a purchase, completed a form)
+- STOP researching and summarize - don't visit more than 3 sites!
+
+WHEN NOT TO USE "done":
+- You're on a search results page - visit actual sites first!
+- You've only visited one source when multiple were requested
+- You haven't actually read the content of the pages you found
 
 Selector tips:
 - Use text= selectors for visible text: text="Click Me"
 - Use CSS selectors for elements with IDs/classes
+- If clicks keep failing, use goto with a URL from Top Links instead
 
 Risk classification:
 - HIGH: purchases, payments, sending messages, account settings, deleting
 - MEDIUM: logging in, uploading files, granting permissions
 - LOW: navigation, reading, extracting data
 
+OS Risk classification:
+- HIGH: rm, dd, mkfs, sudo, chmod -R, chown -R, writing to /etc /usr /bin
+- MEDIUM: writing files, running scripts, process management
+- LOW: reading files, listing directories, inspecting system info
+
 Set requires_approval=true for HIGH risk and MEDIUM risk actions."""
+
+    OS_SYSTEM_PROMPT = """You are an autonomous Linux system agent that helps users accomplish tasks on their local machine.
+
+You receive the current system state and must respond with a SINGLE action to take next.
+
+CRITICAL: You MUST respond with ONLY valid JSON, no markdown, no prose, no explanation outside the JSON.
+
+⚠️ CRITICAL STEP LIMIT: You have a MAXIMUM of 5 actions. After 3-5 commands, you MUST call "done" with your findings!
+
+Your response must follow this exact schema:
+{
+  "action": "os_exec|os_list_dir|os_read_file|os_write_file|done",
+  "args": { ... },
+  "rationale": "short reason for this action",
+  "risk": "low|medium|high",
+  "requires_approval": true/false,
+  "final_answer": "only when action=done - put your complete answer/summary here"
+}
+
+Action argument rules:
+- os_exec: { "cmd": "command string", "timeout_s": 30, "cwd": "/optional/path" }
+- os_list_dir: { "path": "/path/to/dir" }
+- os_read_file: { "path": "/path/to/file", "max_bytes": 10000 }
+- os_write_file: { "path": "/path/to/file", "content": "...", "mode": "overwrite|append" }
+- done: { "summary_style": "bullets|paragraph" }
+
+CRITICAL WORKFLOW - STICK TO THIS PATTERN:
+1. Run 1-2 commands to gather the information needed
+2. If a command fails, try ONE alternative approach  
+3. IMMEDIATELY call "done" with whatever information you gathered
+4. DO NOT keep trying different commands - summarize what you found!
+
+EXAMPLE (3 steps max):
+User: "Look at my hard drive"
+Step 1: os_exec(cmd="df -h") → get disk usage
+Step 2: os_list_dir(path="~") → see home directory
+Step 3: done(final_answer="Your disk has 50GB used, 100GB free. Home contains: Documents, Downloads, projects...")
+
+WHEN TO CALL "done" IMMEDIATELY:
+- You have gathered useful information (even partial)
+- A command failed - summarize what you DO know, don't keep retrying
+- You've run 3+ commands - STOP and summarize NOW
+- The user's question can be answered from data you already have
+
+HANDLE FAILURES GRACEFULLY:
+- If a command fails with permission denied, say "I couldn't access X due to permissions"
+- Don't retry the same failing command with slight variations
+- Summarize what you COULD access
+
+Risk classification:
+- HIGH: rm, dd, mkfs, sudo, chmod -R, chown -R, writing to /etc /usr /bin
+- MEDIUM: writing files, running scripts, modifying configs
+- LOW: reading files, listing directories, inspecting system info (df, ls, cat, grep)
+
+Set requires_approval=true for HIGH and MEDIUM risk actions."""
 
     REPAIR_PROMPT = """Your previous response was not valid JSON. 
     
@@ -112,45 +188,62 @@ The required format is:
   "final_answer": null or "..."
 }"""
 
-    def __init__(self, config: AgentConfig):
+    def __init__(self, config: AgentConfig, provider_config: "ProviderConfig | None" = None):
         """Initialize the LLM client.
         
         Args:
             config: Agent configuration
+            provider_config: Optional provider configuration for native adapters
         """
         self.config = config
         self.endpoint = config.model_endpoint.rstrip("/")
         self.model = config.model
         self.api_key = config.api_key
         
-        # Build headers
+        # If provider config supplied, use native adapter
+        self._adapter = None
+        if provider_config:
+            try:
+                from .adapters import create_adapter, Message
+                from .providers import Provider
+                self._adapter = create_adapter(provider_config.provider, provider_config)
+                self._Message = Message
+            except ImportError:
+                pass  # Fall back to direct HTTP
+        
+        # Build headers (for fallback HTTP mode)
         self.headers = {"Content-Type": "application/json"}
         if self.api_key:
             self.headers["Authorization"] = f"Bearer {self.api_key}"
         
-        # HTTP client
+        # HTTP client (for fallback mode)
         self.client = httpx.Client(timeout=60.0)
     
     def close(self) -> None:
         """Close the HTTP client."""
         self.client.close()
+        if self._adapter:
+            self._adapter.close()
     
     def _build_messages(
         self, 
         state: dict[str, Any], 
-        repair: bool = False
+        repair: bool = False,
+        system_prompt: Optional[str] = None,
     ) -> list[dict[str, str]]:
         """Build the chat messages for the LLM.
         
         Args:
             state: Current page state
             repair: Whether this is a repair request after invalid JSON
+            system_prompt: Optional override for system prompt (e.g., OS mode)
             
         Returns:
             List of chat messages
         """
+        prompt = system_prompt if system_prompt else self.SYSTEM_PROMPT
         messages = [
-            {"role": "system", "content": self.SYSTEM_PROMPT}
+            {"role": "system", "content": prompt}
         ]
         
         # Format visited URLs for context
@@ -230,6 +323,14 @@ What is your next action? Respond with JSON only."""
         """
         import time
         
+        # Use adapter if available (for native Anthropic/Google support)
+        if self._adapter:
+            adapter_messages = [
+                self._Message(m["role"], m["content"]) for m in messages
+            ]
+            return self._adapter.chat_completion(adapter_messages, max_retries)
+        
+        # Fallback: Direct OpenAI-compatible HTTP requests
         url = f"{self.endpoint}/chat/completions"
         
         payload = {
@@ -272,13 +373,15 @@ What is your next action? Respond with JSON only."""
     def get_next_action(
         self, 
         state: dict[str, Any],
-        max_retries: int = 2
+        max_retries: int = 2,
+        system_prompt: Optional[str] = None,
     ) -> ActionResponse:
         """Get the next action from the LLM.
         
         Args:
             state: Current page state
             max_retries: Maximum number of retries for invalid JSON
+            system_prompt: Optional override for system prompt (e.g., OS mode)
             
         Returns:
             Validated action response
@@ -290,7 +393,7 @@ What is your next action? Respond with JSON only."""
         
         for attempt in range(max_retries + 1):
             repair = attempt > 0
-            messages = self._build_messages(state, repair=repair)
+            messages = self._build_messages(state, repair=repair, system_prompt=system_prompt)
             
             try:
                 raw_response = self.chat_completion(messages)

@@ -124,6 +124,13 @@ Examples:
         help="Enable Playwright tracing (saves trace.zip)",
     )
     
+    run_parser.add_argument(
+        "--gui-ipc",
+        action="store_true",
+        default=False,
+        help="Use IPC mode for approval (for GUI subprocess)",
+    )
+    
     # GUI command
     gui_parser = subparsers.add_parser(
         "gui",
@@ -156,6 +163,7 @@ def run_command(args: argparse.Namespace) -> int:
         fresh_profile=args.fresh_profile,
         no_persist=args.no_persist,
         enable_tracing=args.enable_tracing,
+        gui_ipc=args.gui_ipc,
     )
     
     try:

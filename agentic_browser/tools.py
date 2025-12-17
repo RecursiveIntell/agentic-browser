@@ -131,7 +131,7 @@ class BrowserTools:
         selector: str, 
         timeout_ms: int = 10000
     ) -> ToolResult:
-        """Click an element.
+        """Click an element with fallback strategies.
         
         Args:
             selector: Element selector
@@ -140,17 +140,59 @@ class BrowserTools:
         Returns:
             ToolResult
         """
+        original_selector = selector
         selector = format_selector(selector)
         
-        self.page.click(selector, timeout=timeout_ms)
+        # Build list of selectors to try
+        selectors_to_try = [selector]
         
-        # Wait briefly for any navigation or updates
-        self.page.wait_for_load_state("domcontentloaded", timeout=5000)
+        # If it's a text= selector, add partial match fallbacks
+        if selector.startswith('text="') and selector.endswith('"'):
+            full_text = selector[6:-1]  # Extract text between quotes
+            
+            # Try shorter versions of the text (first 50, 30, 20 chars)
+            if len(full_text) > 50:
+                selectors_to_try.append(f'text="{full_text[:50]}"')
+            if len(full_text) > 30:
+                selectors_to_try.append(f'text="{full_text[:30]}"')
+            if len(full_text) > 20:
+                selectors_to_try.append(f'text="{full_text[:20]}"')
+            
+            # Also try as a link with partial text
+            selectors_to_try.append(f'a:has-text("{full_text[:40]}")')
+            selectors_to_try.append(f'a:has-text("{full_text[:25]}")')
+            
+            # Try h1, h2, h3 with text (common for article titles)
+            selectors_to_try.append(f':is(h1,h2,h3):has-text("{full_text[:30]}")')
         
+        last_error = None
+        for try_selector in selectors_to_try:
+            try:
+                # Check if element exists first
+                locator = self.page.locator(try_selector)
+                if locator.count() > 0:
+                    locator.first.click(timeout=timeout_ms // len(selectors_to_try) or 3000)
+                    
+                    # Wait briefly for any navigation or updates
+                    try:
+                        self.page.wait_for_load_state("domcontentloaded", timeout=5000)
+                    except:
+                        pass
+                    
+                    return ToolResult(
+                        success=True,
+                        message=f"Clicked: {try_selector}",
+                        data={"url": self.page.url, "selector_used": try_selector},
+                    )
+            except Exception as e:
+                last_error = e
+                continue
+        
+        # If all selectors failed, return the error
         return ToolResult(
-            success=True,
-            message=f"Clicked: {selector}",
-            data={"url": self.page.url},
+            success=False,
+            message=f"Could not click element. Tried selectors: {selectors_to_try[:3]}... Error: {last_error}",
+            data={"original_selector": original_selector},
         )
     
     def type_text(
@@ -348,72 +390,93 @@ class BrowserTools:
     def extract_visible_text(self, max_chars: int = 8000) -> ToolResult:
         """Extract all visible text from the page.
         
+        Includes retry logic for transient timing errors during navigation.
+        
         Args:
             max_chars: Maximum characters to return
             
         Returns:
             ToolResult with visible text
         """
-        # Wait for page to be ready
-        try:
-            self.page.wait_for_load_state("domcontentloaded", timeout=3000)
-        except:
-            pass
+        max_retries = 3
+        last_error = None
         
-        # Get text content, excluding scripts and styles
-        text = self.page.evaluate("""
-            () => {
-                // Safety check for document.body
-                if (!document.body) {
-                    return document.title || 'Page is loading...';
-                }
+        for attempt in range(max_retries):
+            try:
+                # Wait for page to be ready
+                try:
+                    self.page.wait_for_load_state("domcontentloaded", timeout=3000)
+                except:
+                    pass
                 
-                try {
-                    const walker = document.createTreeWalker(
-                        document.body,
-                        NodeFilter.SHOW_TEXT,
-                        {
-                            acceptNode: (node) => {
-                                const parent = node.parentElement;
-                                if (!parent) return NodeFilter.FILTER_REJECT;
-                                const tag = parent.tagName.toLowerCase();
-                                if (['script', 'style', 'noscript'].includes(tag)) {
-                                    return NodeFilter.FILTER_REJECT;
-                                }
-                                try {
-                                    const style = window.getComputedStyle(parent);
-                                    if (style.display === 'none' || style.visibility === 'hidden') {
-                                        return NodeFilter.FILTER_REJECT;
-                                    }
-                                } catch (e) {
-                                    return NodeFilter.FILTER_ACCEPT;
-                                }
-                                return NodeFilter.FILTER_ACCEPT;
-                            }
+                # Get text content, excluding scripts and styles
+                text = self.page.evaluate("""
+                    () => {
+                        // Safety check for document.body
+                        if (!document.body) {
+                            return document.title || 'Page is loading...';
                         }
-                    );
-                    
-                    const texts = [];
-                    while (walker.nextNode()) {
-                        const text = walker.currentNode.textContent.trim();
-                        if (text) texts.push(text);
+                        
+                        try {
+                            const walker = document.createTreeWalker(
+                                document.body,
+                                NodeFilter.SHOW_TEXT,
+                                {
+                                    acceptNode: (node) => {
+                                        const parent = node.parentElement;
+                                        if (!parent) return NodeFilter.FILTER_REJECT;
+                                        const tag = parent.tagName.toLowerCase();
+                                        if (['script', 'style', 'noscript'].includes(tag)) {
+                                            return NodeFilter.FILTER_REJECT;
+                                        }
+                                        try {
+                                            const style = window.getComputedStyle(parent);
+                                            if (style.display === 'none' || style.visibility === 'hidden') {
+                                                return NodeFilter.FILTER_REJECT;
+                                            }
+                                        } catch (e) {
+                                            return NodeFilter.FILTER_ACCEPT;
+                                        }
+                                        return NodeFilter.FILTER_ACCEPT;
+                                    }
+                                }
+                            );
+                            
+                            const texts = [];
+                            while (walker.nextNode()) {
+                                const text = walker.currentNode.textContent.trim();
+                                if (text) texts.push(text);
+                            }
+                            return texts.join(' ') || document.body.innerText || '';
+                        } catch (e) {
+                            // Fallback to simple innerText
+                            return document.body.innerText || document.title || 'Unable to extract text';
+                        }
                     }
-                    return texts.join(' ') || document.body.innerText || '';
-                } catch (e) {
-                    // Fallback to simple innerText
-                    return document.body.innerText || document.title || 'Unable to extract text';
-                }
-            }
-        """)
+                """)
+                
+                # Clean and truncate
+                text = " ".join(text.split())
+                text = truncate_text(text, max_chars)
+                
+                return ToolResult(
+                    success=True,
+                    message=f"Extracted {len(text)} characters of visible text",
+                    data={"text": text},
+                )
+                
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    # Exponential backoff: 500ms, 1000ms, 1500ms
+                    self.page.wait_for_timeout(500 * (attempt + 1))
+                    continue
         
-        # Clean and truncate
-        text = " ".join(text.split())
-        text = truncate_text(text, max_chars)
-        
+        # Return safe empty result instead of crashing
         return ToolResult(
             success=True,
-            message=f"Extracted {len(text)} characters of visible text",
-            data={"text": text},
+            message="Failed to extract text (timing issue), returning empty",
+            data={"text": "", "warning": str(last_error) if last_error else "Unknown error"},
         )
     
     def screenshot(self, label: Optional[str] = None) -> ToolResult:

@@ -185,6 +185,7 @@ class RunLogger:
     
     def print_step(
         self,
+        step: int,
         action: str,
         args: dict[str, Any],
         rationale: str,
@@ -194,6 +195,7 @@ class RunLogger:
         """Print a step to the console.
         
         Args:
+            step: The step number to display
             action: The action being taken
             args: Action arguments
             rationale: Why this action was chosen
@@ -209,7 +211,7 @@ class RunLogger:
         
         # Build step display
         step_text = Text()
-        step_text.append(f"Step {self.step_count}: ", style="bold")
+        step_text.append(f"Step {step}: ", style="bold")
         step_text.append(f"{action}", style="bold cyan")
         
         # Format args nicely

@@ -53,16 +53,25 @@ CRITICAL WORKFLOW PATTERNS:
 1. SEARCH: After typing in a search box, you MUST press Enter to submit
 2. FORMS: After filling form fields, click the submit button  
 3. NEVER repeat the same action - always progress to the next step
-4. COMPLETION: Once you have the information needed to answer the goal:
-   - Use action="done" IMMEDIATELY
-   - Put your complete answer in "final_answer"
-   - Do NOT keep extracting or navigating - just finish!
+4. RESEARCH TASKS: When asked to "research", "compare", "find information", or "look up":
+   - Visit EXACTLY 3 different sources (no more, no less)
+   - Workflow: search → pick 3 links → goto site 1 → extract text → goto site 2 → extract text → goto site 3 → extract text → done
+   - Use URLs from "Top Links" with goto action, not click
+   - After visiting 3 sites and extracting content, IMMEDIATELY call "done" with summary
+   - Do NOT summarize search engine snippets - go to the real sites!
+
+5. CLICKING LINKS: If a click selector fails, use goto with a URL from Top Links instead
 
 WHEN TO USE "done":
-- You have read/extracted the information the user asked for
-- You can answer the user's question from the visible text
-- The task is complete (e.g., clicked a button, filled a form)
-- There's nothing more to do
+- For research: After visiting EXACTLY 3 sites and extracting their content
+- You can provide a comprehensive answer based on content from the sites you visited
+- The task is truly complete (e.g., clicked a button, made a purchase, completed a form)
+- STOP researching and summarize - don't visit more than 3 sites!
+
+WHEN NOT TO USE "done":
+- You're on a search results page - visit actual sites first!
+- You've only visited one source when multiple were requested
+- You haven't actually read the content of the pages you found
 
 Risk classification:
 - HIGH: purchases, payments, sending messages, account settings, deleting
@@ -160,13 +169,15 @@ What is your next action? Respond with JSON only."""
     def get_next_action(
         self, 
         state: dict[str, Any],
-        max_retries: int = 2
+        max_retries: int = 2,
+        system_prompt: Optional[str] = None,
     ) -> ActionResponse:
         """Get the next action from the LLM using conversation memory.
         
         Args:
             state: Current page state
             max_retries: Maximum number of retries for invalid JSON
+            system_prompt: Optional override for system prompt (e.g., OS mode)
             
         Returns:
             Validated action response
@@ -181,9 +192,12 @@ What is your next action? Respond with JSON only."""
         # Build the state message
         state_message = self._build_state_message(state)
         
+        # Use provided system prompt or default
+        prompt = system_prompt if system_prompt else self.SYSTEM_PROMPT
+        
         # Build messages including history
         messages = [
-            SystemMessage(content=self.SYSTEM_PROMPT),
+            SystemMessage(content=prompt),
             *self.message_history[-10:],  # Keep last 10 exchanges for context
             HumanMessage(content=state_message),
         ]

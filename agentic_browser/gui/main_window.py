@@ -424,6 +424,8 @@ class MainWindow(QMainWindow):
         self._log(f"🔌 Provider: {provider_config.display_name}", "dim")
         self._log(f"🤖 Model: {provider_config.effective_model}", "dim")
         self._log(f"📁 Profile: {settings.profile_name}", "dim")
+        if not settings.auto_approve:
+            self._log("⚠️  Auto-approve OFF: Approval prompts will appear in TERMINAL", "warning")
         self._log("─" * 50, "dim")
         self._log("🚀 Starting agent...", "info")
         self._log("", "dim")
@@ -443,8 +445,14 @@ class MainWindow(QMainWindow):
             "--max-steps", str(settings.max_steps),
             "--model-endpoint", provider_config.endpoint,
             "--model", provider_config.effective_model,
-            "--auto-approve",  # Always auto-approve in GUI mode
         ]
+        
+        # Only add auto-approve if explicitly enabled in settings
+        # Otherwise use GUI IPC for approval dialogs
+        if settings.auto_approve:
+            cmd.append("--auto-approve")
+        else:
+            cmd.append("--gui-ipc")
         
         if settings.headless:
             cmd.append("--headless")
@@ -523,6 +531,11 @@ class MainWindow(QMainWindow):
     
     def _parse_output_line(self, line: str):
         """Parse a line of output to extract step info."""
+        # Check for approval request (IPC protocol)
+        if line.startswith("APPROVAL_REQUEST:"):
+            self._handle_approval_request(line[17:])  # Skip prefix
+            return
+        
         # Strip ANSI codes for parsing
         ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
         clean_line = ansi_escape.sub('', line).strip()
@@ -566,6 +579,84 @@ class MainWindow(QMainWindow):
         # Check for final answer
         if "final answer" in lower or "goal accomplished" in lower:
             self.status_text.append(f"✅ {clean_line}")
+    
+    def _handle_approval_request(self, json_str: str):
+        """Handle approval request from subprocess via IPC protocol."""
+        import json as json_module
+        from .approval_dialog import ApprovalDialog
+        from ..safety import RiskLevel
+        
+        try:
+            request = json_module.loads(json_str)
+            
+            # Check if this is a guidance request
+            if request.get("type") == "guidance":
+                # Show simple input dialog
+                from PySide6.QtWidgets import QInputDialog
+                text, ok = QInputDialog.getText(
+                    self,
+                    "Action Denied",
+                    "Provide guidance for next action (or leave empty):",
+                )
+                guidance = text if ok else ""
+                response = {"guidance": guidance}
+                self._send_approval_response(response)
+                return
+            
+            # Parse approval request
+            action = request.get("action", "unknown")
+            args = request.get("args", {})
+            risk_str = request.get("risk_level", "low")
+            rationale = request.get("rationale", "")
+            
+            # Convert risk level
+            try:
+                risk_level = RiskLevel(risk_str)
+            except ValueError:
+                risk_level = RiskLevel.MEDIUM
+            
+            self._log(f"⚠️ Approval requested for: {action}", "warning")
+            
+            # Show approval dialog
+            dialog = ApprovalDialog(
+                action=action,
+                args=args,
+                risk_level=risk_level,
+                rationale=rationale,
+                parent=self,
+            )
+            
+            dialog.exec()
+            result_code, modified = dialog.get_result()
+            
+            # Build response
+            if result_code == ApprovalDialog.APPROVED:
+                response = {"approved": True}
+                self._log("✓ Action approved", "success")
+            elif result_code == ApprovalDialog.EDITED:
+                response = {"approved": True, "modified_action": modified}
+                self._log("✓ Action approved (edited)", "success")
+            else:
+                response = {"approved": False}
+                self._log("✗ Action denied", "warning")
+            
+            self._send_approval_response(response)
+            
+        except Exception as e:
+            self._log(f"Error handling approval: {e}", "error")
+            # Deny on error
+            self._send_approval_response({"approved": False})
+    
+    def _send_approval_response(self, response: dict):
+        """Send approval response to subprocess via stdin."""
+        import json as json_module
+        
+        if not self._process:
+            return
+        
+        response_line = f"APPROVAL_RESPONSE:{json_module.dumps(response)}\n"
+        self._process.write(response_line.encode("utf-8"))
+    
     
     def _on_finished(self, exit_code: int, exit_status):
         """Handle process finished."""
