@@ -105,25 +105,28 @@ Respond with JSON:
         current_url = page_state.get('url', 'about:blank')
         
         # Determine next action hint
-        if current_url == 'about:blank' or not current_url or current_url.startswith('about:'):
+        # Loop Protection & Intelligent Hints
+        visited_search = any('duckduckgo.com' in u for u in state['visited_urls'])
+        
+        if visited_search and ('duckduckgo.com' in current_url or current_url == 'about:blank'):
+            action_hint = """
+CRITICAL: You have already performed a search.
+DO NOT use "goto" to open DuckDuckGo again.
+1. If you see results, "extract_visible_text".
+2. If the page seems blank, it might still have content - try to "extract_visible_text" anyway.
+3. Or "goto" a specific RESULT link (not search engine).
+"""
+        elif current_url == 'about:blank' or not current_url or current_url.startswith('about:'):
             action_hint = """
 ACTION REQUIRED: Start your search immediately!
 Construct a search URL: {"action": "goto", "args": {"url": "https://duckduckgo.com/?q=your+search+query"}}
-Example: {"action": "goto", "args": {"url": "https://duckduckgo.com/?q=cat+apps+like+mine"}}
 """
         elif 'duckduckgo.com' in current_url:
-            # We are on search results (or home page)
-            if 'q=' in current_url:
-                action_hint = """
+            # We are on search results
+             action_hint = """
 You are on search results.
-1. Extract the text/links: {"action": "extract_visible_text", "args": {"max_chars": 5000}}
-2. Then visit a promising result: {"action": "goto", "args": {"url": "https://..."}}
-"""
-            else:
-                # Home page without query? Should rare if we used direct link, but fallback:
-                action_hint = """
-Type your search: {"action": "type", "args": {"selector": "input[name='q']", "text": "your query"}}
-Then press Enter: {"action": "press", "args": {"key": "Enter"}}
+1. Extract text: {"action": "extract_visible_text", "args": {"max_chars": 5000}}
+2. Then visit a result: {"action": "goto", "args": {"url": "https://..."}}
 """
         elif sources_visited >= 2:
             action_hint = """
