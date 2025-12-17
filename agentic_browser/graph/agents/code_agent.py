@@ -116,11 +116,13 @@ TIPS:
             action_data = self._parse_action(response.content)
             
             if action_data.get("action") == "done":
+                # Store findings but DON'T mark task_complete - let supervisor decide
+                summary = action_data.get("args", {}).get("summary", "Analysis completed")
                 return self._update_state(
                     state,
                     message=AIMessage(content=response.content),
-                    task_complete=True,
-                    final_answer=action_data.get("args", {}).get("summary", "Analysis completed"),
+                    extracted_data={"code_analysis": summary},
+                    # Note: NOT setting task_complete - supervisor handles that
                 )
             
             # Execute OS action

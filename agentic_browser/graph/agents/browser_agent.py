@@ -107,11 +107,12 @@ Your task: {state['goal']}
             action_data = self._parse_action(response.content)
             
             if action_data.get("action") == "done":
+                # Store findings but DON'T mark task_complete - let supervisor decide
+                summary = action_data.get("args", {}).get("summary", "Task completed")
                 return self._update_state(
                     state,
                     message=AIMessage(content=response.content),
-                    task_complete=True,
-                    final_answer=action_data.get("args", {}).get("summary", "Task completed"),
+                    extracted_data={"browser_findings": summary},
                 )
             
             # Execute the browser action

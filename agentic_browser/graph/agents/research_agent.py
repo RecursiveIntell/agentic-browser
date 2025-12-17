@@ -117,11 +117,14 @@ REMINDER: Visit 2-3 actual sources, then synthesize with "done".
             action_data = self._parse_action(response.content)
             
             if action_data.get("action") == "done":
+                # Research agent CAN mark complete - it's typically the final step
+                summary = action_data.get("args", {}).get("summary", "Research completed")
                 return self._update_state(
                     state,
                     message=AIMessage(content=response.content),
                     task_complete=True,
-                    final_answer=action_data.get("args", {}).get("summary", "Research completed"),
+                    final_answer=summary,
+                    extracted_data={"research_findings": summary},
                 )
             
             # Execute browser action
