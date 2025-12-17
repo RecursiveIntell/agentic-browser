@@ -167,9 +167,18 @@ TIPS:
             if start != -1 and end != -1:
                 content = content[start:end+1]
             
-            return json.loads(content)
+            data = json.loads(content)
+            
+            # Validate action exists
+            if not data.get("action"):
+                return {
+                    "action": "done", 
+                    "args": {"summary": "Agent error: Failed to generate valid action"}
+                }
+                
+            return data
         except json.JSONDecodeError:
-            return {"action": "done", "args": {"summary": "Failed to parse action"}}
+            return {"action": "done", "args": {"summary": "Failed to parse JSON response"}}
 
 
 def code_agent_node(state: AgentState) -> AgentState:

@@ -103,23 +103,44 @@ Respond with JSON:
         
         # Build context showing progress
         sources_visited = len([u for u in state['visited_urls'] if u and 'duckduckgo' not in u])
+        current_url = page_state.get('url', 'about:blank')
+        
+        # Determine next action hint
+        if current_url == 'about:blank' or not current_url or current_url.startswith('about:'):
+            action_hint = """
+ACTION REQUIRED: You are on a blank page!
+Your FIRST action MUST be: {"action": "goto", "args": {"url": "https://duckduckgo.com"}}
+"""
+        elif 'duckduckgo.com' in current_url and not state['visited_urls']:
+            action_hint = """
+ACTION REQUIRED: You are on DuckDuckGo.
+Type your search: {"action": "type", "args": {"selector": "input[name='q']", "text": "your search query"}}
+Then press Enter: {"action": "press", "args": {"key": "Enter"}}
+"""
+        elif sources_visited >= 2:
+            action_hint = """
+You have visited enough sources. Synthesize your findings now:
+{"action": "done", "args": {"summary": "## Research Report\\n\\n[Your findings here]"}}
+"""
+        else:
+            action_hint = "Continue research or call done if you have enough info."
         
         task_context = f"""
 RESEARCH TASK: {state['goal']}
 
-Sources visited so far: {sources_visited}/3
+Sources visited: {sources_visited}/2-3 recommended
 Visited URLs: {chr(10).join(state['visited_urls'][-5:]) or '(none)'}
 
 Current page: {page_state.get('title', 'Unknown')}
-URL: {page_state.get('url', 'about:blank')}
+URL: {current_url}
+
+{action_hint}
 
 Visible content (truncated):
 {page_state.get('visible_text', '')[:2000]}
 
 Data collected:
 {json.dumps(state['extracted_data'], indent=2)[:1000]}
-
-REMINDER: Visit 2-3 actual sources, then synthesize with "done".
 """
         
         messages = self._build_messages(state, task_context)
@@ -181,9 +202,18 @@ REMINDER: Visit 2-3 actual sources, then synthesize with "done".
             if start != -1 and end != -1:
                 content = content[start:end+1]
             
-            return json.loads(content)
+            data = json.loads(content)
+            
+            # Validate action
+            if not data.get("action"):
+                return {
+                    "action": "done",
+                    "args": {"summary": "Agent error: Failed to generate valid action"}
+                }
+                
+            return data
         except json.JSONDecodeError:
-            return {"action": "done", "args": {"summary": "Failed to parse action"}}
+            return {"action": "done", "args": {"summary": "Failed to parse JSON response"}}
 
 
 def research_agent_node(state: AgentState) -> AgentState:
