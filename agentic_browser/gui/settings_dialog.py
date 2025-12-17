@@ -96,11 +96,9 @@ class SettingsDialog(QDialog):
         # Model with refresh button
         model_layout = QHBoxLayout()
         self.model_combo = QComboBox()
-        self.model_combo.setEditable(True)
-        self.model_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        self.model_combo.setMaxVisibleItems(15)  # Ensure dropdown shows
+        # NOT editable - proper dropdown for model selection
+        self.model_combo.setMaxVisibleItems(15)
         self.model_combo.setMinimumWidth(200)
-        self.model_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         model_layout.addWidget(self.model_combo, 1)
         
         self.refresh_models_btn = QPushButton("🔄 Refresh")
