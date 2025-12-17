@@ -48,6 +48,11 @@ class Settings:
     window_width: int = 900
     window_height: int = 700
     
+    # LangSmith tracing settings
+    langsmith_enabled: bool = False
+    langsmith_api_key: Optional[str] = None
+    langsmith_project: str = "agentic-browser"
+    
     def get_provider_config(self) -> ProviderConfig:
         """Get the provider configuration."""
         try:
