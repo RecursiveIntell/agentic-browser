@@ -111,7 +111,7 @@ Respond with JSON:
 ACTION REQUIRED: You are on a blank page!
 Your FIRST action MUST be: {"action": "goto", "args": {"url": "https://duckduckgo.com"}}
 """
-        elif 'duckduckgo.com' in current_url and not state['visited_urls']:
+        elif 'duckduckgo.com' in current_url:
             action_hint = """
 ACTION REQUIRED: You are on DuckDuckGo.
 Type your search: {"action": "type", "args": {"selector": "input[name='q']", "text": "your search query"}}

@@ -26,21 +26,27 @@ class CodeAgentNode(BaseAgent):
     SYSTEM_PROMPT = """You are a CODE agent. Analyze projects at the appropriate depth.
 
 Available actions:
-- os_list_dir: { "path": "/path/to/project" } - List directory contents
-- os_read_file: { "path": "/path/to/file" } - Read a file
+- os_list_dir: { "path": "." } - List current directory
+- os_read_file: { "path": "README.md" } - Read a file
 - os_exec: { "cmd": "command" } - Run a shell command
 - done: { "summary": "your analysis" } - Complete with findings
 
 ADAPTIVE WORKFLOW:
 For SIMPLE tasks ("what is this app?"):
-  1. List directory → 2. Read README → 3. Done with summary
+  1. List current directory: {"action": "os_list_dir", "args": {"path": "."}}
+  2. Read README: {"action": "os_read_file", "args": {"path": "README.md"}}
+  3. Done with summary
 
 For COMPLEX tasks ("analyze architecture"):
-  1. List directory structure
-  2. Read config files (package.json, pyproject.toml)
-  3. Read key source files (main entry points)
-  4. Optionally run tests or checks
-  5. Done with detailed analysis
+  1. List structure (.)
+  2. Read config files
+  3. Read source
+  4. Done
+
+CRITICAL RULES:
+1. ALWAYS start with `os_list_dir` on `.` (current dir) - do not guess paths!
+2. Use relative paths ("src/main.py") not absolute unless you are sure.
+3. If a file doesn't exist, check the directory listing again.
 
 FUZZY MATCHING:
 - "cat app" could match: CatOS, Cat Info App, cat-tracker, etc.

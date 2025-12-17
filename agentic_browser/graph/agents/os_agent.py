@@ -28,13 +28,16 @@ class OSAgentNode(BaseAgent):
     SYSTEM_PROMPT = """You are a specialized LINUX OS agent. Your ONLY job is local system operations.
 
 You have access to these OS actions:
-- os_exec: { "cmd": "command string", "timeout_s": 30 }
-- os_list_dir: { "path": "/path/to/dir" }
-- os_read_file: { "path": "/path/to/file" }
-- os_write_file: { "path": "/path/to/file", "content": "...", "mode": "overwrite|append" }
-- done: { "summary": "what you found/accomplished" }
+- os_exec: { "cmd": "ls -F", "timeout_s": 30 }
+- os_list_dir: { "path": "." } - DEFAULT to current directory!
+- os_read_file: { "path": "filename.txt" }
+- os_write_file: { "path": "file.txt", "content": "..." }
+- done: { "summary": "detailed findings" }
 
-CRITICAL RULES:
+STARTING STRATEGY:
+1. ALWAYS start by listing the current directory: {"action": "os_list_dir", "args": {"path": "."}}
+2. Then drill down into relevant folders
+3. Never guess absolute paths like "/path/to/project" - check first!
 1. Use 3-5 commands max, then call "done" with your findings
 2. CASE SENSITIVITY: "Coding" = "coding" = "CODING" - match by intent!
 3. FUZZY MATCHING: "cat app" could be CatOS, cat-tracker, kitty-project, etc.
