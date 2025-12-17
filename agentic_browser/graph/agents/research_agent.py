@@ -156,18 +156,21 @@ You have some research data. Options:
 3. If you have ENOUGH data (2+ sources), synthesize: {"action": "done", "args": {"summary": "..."}}
 """
         
-        elif sources_visited >= 2:
+        elif sources_visited >= 3:
             action_hint = """
-You have visited enough sources. Synthesize your findings now:
-{"action": "done", "args": {"summary": "## Research Report\\n\\n[Your findings here]"}}
+You have visited 3+ sources. Synthesize your findings now:
+{"action": "done", "args": {"summary": "## Research Report\n\n[Your detailed findings here]"}}
 """
         else:
             action_hint = "Continue research."
         
+        # Minimum sources required for completion
+        MIN_SOURCES_REQUIRED = 3
+        
         task_context = f"""
 RESEARCH TASK: {state['goal']}
 
-Sources visited: {sources_visited}/2-3 recommended
+Sources visited: {sources_visited}/{MIN_SOURCES_REQUIRED} MINIMUM required
 Visited URLs: {chr(10).join(state['visited_urls'][-5:]) or '(none)'}
 
 Current page: {page_state.get('title', 'Unknown')}
@@ -189,12 +192,15 @@ Data collected:
             action_data = self._parse_action(response.content)
             
             if action_data.get("action") == "done":
-                # HARD BLOCK: Reject 'done' if no research content collected
-                has_research_content = any(
-                    'research_source' in k for k in state['extracted_data'].keys()
-                )
+                # HARD BLOCK: Reject 'done' if insufficient research content
+                research_source_count = len([
+                    k for k in state['extracted_data'].keys() 
+                    if 'research_source' in k
+                ])
                 
-                if not has_research_content:
+                MIN_SOURCES = 3
+                
+                if research_source_count < MIN_SOURCES:
                     # Force extraction instead of allowing premature completion
                     action_data = {
                         "action": "extract_visible_text",
