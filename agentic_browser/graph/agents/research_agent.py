@@ -134,12 +134,26 @@ You are on search results.
 2. Then visit a result: {"action": "goto", "args": {"url": "https://..."}}
 """
         elif 'duckduckgo.com' not in current_url and current_url != 'about:blank':
-            # Content page logic
-            action_hint = """
-You are on a content page. 
-1. IF NOT EXTRACTED: {"action": "extract_visible_text", "args": {"max_chars": 8000}}
-2. IF EXTRACTED: Visit next result from your search list: {"action": "goto", "args": {"url": "..."}}
-3. OR if finished: {"action": "done", ...}
+            # Content page logic - MUST extract before anything else
+            # Check if we have any research content yet
+            has_research_content = any(
+                'research_source' in k for k in state['extracted_data'].keys()
+            )
+            
+            if not has_research_content:
+                action_hint = """
+MANDATORY: You are on a content page but have NOT extracted any research data yet.
+You MUST extract text from this page:
+{"action": "extract_visible_text", "args": {"max_chars": 8000}}
+
+DO NOT call "done". DO NOT navigate away. EXTRACT FIRST.
+"""
+            else:
+                action_hint = """
+You have some research data. Options:
+1. Extract this page too: {"action": "extract_visible_text", ...}
+2. Visit another result to get more info.
+3. If you have ENOUGH data (2+ sources), synthesize: {"action": "done", "args": {"summary": "..."}}
 """
         
         elif sources_visited >= 2:
@@ -175,15 +189,28 @@ Data collected:
             action_data = self._parse_action(response.content)
             
             if action_data.get("action") == "done":
-                # Research agent CAN mark complete - it's typically the final step
-                summary = action_data.get("args", {}).get("summary", "Research completed")
-                return self._update_state(
-                    state,
-                    messages=[AIMessage(content=response.content)],
-                    task_complete=True,
-                    final_answer=summary,
-                    extracted_data={"research_findings": summary},
+                # HARD BLOCK: Reject 'done' if no research content collected
+                has_research_content = any(
+                    'research_source' in k for k in state['extracted_data'].keys()
                 )
+                
+                if not has_research_content:
+                    # Force extraction instead of allowing premature completion
+                    action_data = {
+                        "action": "extract_visible_text",
+                        "args": {"max_chars": 8000}
+                    }
+                    # Fall through to execute this action
+                else:
+                    # Allow completion with research data
+                    summary = action_data.get("args", {}).get("summary", "Research completed")
+                    return self._update_state(
+                        state,
+                        messages=[AIMessage(content=response.content)],
+                        task_complete=True,
+                        final_answer=summary,
+                        extracted_data={"research_findings": summary},
+                    )
             
             # Execute browser action
             result = self._browser_tools.execute(
