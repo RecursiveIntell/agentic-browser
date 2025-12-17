@@ -128,7 +128,31 @@ When completing, synthesize ALL gathered data into a useful report:
         
         try:
             response = self.llm.invoke(messages)
+            
+            # DEBUG: Print Supervisor decision
+            print(f"\n{'='*60}")
+            print(f"[DEBUG] Supervisor - Raw LLM Response:")
+            print(f"{'='*60}")
+            print(response.content[:1000] if len(response.content) > 1000 else response.content)
+            print(f"{'='*60}\n")
+            
             decision = self._parse_decision(response.content)
+            
+            # DEBUG: Print parsed decision
+            print(f"[DEBUG] Supervisor - Parsed Decision: {decision}")
+            print(f"[DEBUG] Supervisor - Current step: {state['step_count']}, extracted_data keys: {list(state['extracted_data'].keys())}")
+            
+            # HARD BLOCK: Minimum steps before allowing completion
+            MIN_STEPS_BEFORE_DONE = 5
+            
+            if decision.get("route_to") == "done":
+                if state["step_count"] < MIN_STEPS_BEFORE_DONE:
+                    print(f"[DEBUG] Supervisor - BLOCKED 'done': step_count ({state['step_count']}) < MIN_STEPS ({MIN_STEPS_BEFORE_DONE})")
+                    # Force continue with code agent to gather more data
+                    decision = {"route_to": "code", "rationale": "Need more exploration before completing"}
+                elif not state['extracted_data'] or len(state['extracted_data']) == 0:
+                    print(f"[DEBUG] Supervisor - BLOCKED 'done': No extracted_data yet")
+                    decision = {"route_to": "code", "rationale": "No data collected yet"}
             
             if decision.get("route_to") == "done":
                 return {
@@ -141,13 +165,14 @@ When completing, synthesize ALL gathered data into a useful report:
             
             return {
                 **state,
-                "current_domain": decision.get("route_to", "browser"),
+                "current_domain": decision.get("route_to", state["current_domain"]),
                 "active_agent": "supervisor",
                 "step_count": state["step_count"] + 1,
                 "messages": [AIMessage(content=response.content)],
             }
             
         except Exception as e:
+            print(f"[DEBUG] Supervisor - ERROR: {e}")
             # On error, try to continue with current domain
             return {
                 **state,
@@ -241,13 +266,18 @@ If the worker agent completed with a final answer, synthesize and return done.
         """Parse supervisor decision from response."""
         try:
             content = response.strip()
+            if not content:
+                print("[DEBUG] Supervisor - Empty response, continuing with code agent")
+                return {"route_to": "code", "rationale": "Empty LLM response, continuing exploration"}
             start = content.find("{")
             end = content.rfind("}")
             if start != -1 and end != -1:
                 content = content[start:end+1]
             return json.loads(content)
         except json.JSONDecodeError:
-            return {"route_to": "done", "final_answer": "Task completed"}
+            # On parse failure, continue exploration instead of quitting
+            print("[DEBUG] Supervisor - JSON parse failed, continuing with code agent")
+            return {"route_to": "code", "rationale": "Failed to parse response"}
     
     def _map_domain(self, domain: str) -> str:
         """Map DomainRouter domain to agent names."""
