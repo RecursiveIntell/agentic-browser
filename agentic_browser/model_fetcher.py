@@ -82,8 +82,12 @@ def _fetch_openai_models(endpoint: str, api_key: Optional[str], timeout: float) 
         models = []
         for model in data.get("data", []):
             model_id = model.get("id", "")
-            # Filter to chat models
-            if any(x in model_id for x in ["gpt-4", "gpt-3.5", "o1", "o3"]):
+            # Filter to chat/reasoning models - include current and future patterns
+            if any(x in model_id for x in [
+                "gpt-4", "gpt-3.5", "gpt-5",  # GPT models
+                "o1", "o3", "o4",              # Reasoning models
+                "chatgpt-4o",                  # ChatGPT specific
+            ]):
                 models.append(model_id)
         
         return sorted(models)

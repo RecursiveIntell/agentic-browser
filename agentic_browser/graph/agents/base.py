@@ -32,13 +32,22 @@ class BaseAgent(ABC):
             config: Agent configuration
         """
         self.config = config
-        self.llm = ChatOpenAI(
-            base_url=config.model_endpoint,
-            api_key=config.api_key or "not-required",
-            model=config.model,
-            temperature=0.1,
-            max_tokens=1000,
-        )
+        
+        # Build LLM kwargs - some models (o1, o3) don't support temperature
+        llm_kwargs = {
+            "base_url": config.model_endpoint,
+            "api_key": config.api_key or "not-required",
+            "model": config.model,
+            "max_tokens": 1000,
+        }
+        
+        # Only add temperature for models that support it
+        model_lower = (config.model or "").lower()
+        is_reasoning_model = any(x in model_lower for x in ["o1", "o3", "o4"])
+        if not is_reasoning_model:
+            llm_kwargs["temperature"] = 0.1
+            
+        self.llm = ChatOpenAI(**llm_kwargs)
     
     @property
     @abstractmethod
