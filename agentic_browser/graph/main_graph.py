@@ -129,15 +129,20 @@ class MultiAgentRunner:
         """
         import uuid
         
-        # Create initial state
-        initial_state = create_initial_state(goal, max_steps)
+        # Create initial state with config and tools embedded
+        initial_state = create_initial_state(
+            goal=goal,
+            max_steps=max_steps,
+            config=self.config,
+            browser_tools=self.browser_tools,
+            os_tools=self.os_tools,
+        )
         
         # Run the graph with thread_id for checkpointer
         final_state = self.graph.invoke(
             initial_state,
             config={
                 "configurable": {
-                    **self.runtime_config,
                     "thread_id": str(uuid.uuid4()),
                 }
             },
@@ -157,13 +162,19 @@ class MultiAgentRunner:
         """
         import uuid
         
-        initial_state = create_initial_state(goal, max_steps)
+        # Create initial state with config and tools embedded
+        initial_state = create_initial_state(
+            goal=goal,
+            max_steps=max_steps,
+            config=self.config,
+            browser_tools=self.browser_tools,
+            os_tools=self.os_tools,
+        )
         
         for event in self.graph.stream(
             initial_state,
             config={
                 "configurable": {
-                    **self.runtime_config,
                     "thread_id": str(uuid.uuid4()),
                 }
             },

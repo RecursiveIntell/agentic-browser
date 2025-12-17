@@ -209,9 +209,13 @@ If the worker agent completed with a final answer, synthesize and return done.
         return "Reached maximum step limit without completing the task."
 
 
-def supervisor_node(state: AgentState, config: dict) -> AgentState:
+def supervisor_node(state: AgentState) -> AgentState:
     """LangGraph node function for supervisor."""
-    agent_config = config.get("agent_config")
+    # Config is stored in state by MultiAgentRunner
+    agent_config = state.get("_config")
+    if not agent_config:
+        # Fallback: create default config
+        agent_config = AgentConfig()
     supervisor = Supervisor(agent_config)
     return supervisor.route(state)
 

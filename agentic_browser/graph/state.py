@@ -46,14 +46,28 @@ class AgentState(TypedDict):
     # Safety
     pending_approval: dict | None  # Action awaiting human approval
     approved_actions: list[str]  # Actions user has pre-approved
+    
+    # Runtime config and tools (injected by MultiAgentRunner)
+    _config: Any  # AgentConfig
+    _browser_tools: Any  # BrowserTools or None
+    _os_tools: Any  # OSTools or None
 
 
-def create_initial_state(goal: str, max_steps: int = 30) -> AgentState:
+def create_initial_state(
+    goal: str, 
+    max_steps: int = 30,
+    config: Any = None,
+    browser_tools: Any = None,
+    os_tools: Any = None,
+) -> AgentState:
     """Create initial state for a new task.
     
     Args:
         goal: User's goal/request
         max_steps: Maximum steps allowed
+        config: AgentConfig instance
+        browser_tools: BrowserTools instance
+        os_tools: OSTools instance
         
     Returns:
         Initial AgentState
@@ -74,4 +88,8 @@ def create_initial_state(goal: str, max_steps: int = 30) -> AgentState:
         max_steps=max_steps,
         pending_approval=None,
         approved_actions=[],
+        _config=config,
+        _browser_tools=browser_tools,
+        _os_tools=os_tools,
     )
+

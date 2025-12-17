@@ -190,18 +190,15 @@ Your task: {state['goal']}
         return self._browser_tools.execute(action, args)
 
 
-def browser_agent_node(state: AgentState, config: dict) -> AgentState:
-    """LangGraph node function for browser agent.
+def browser_agent_node(state: AgentState) -> AgentState:
+    """LangGraph node function for browser agent."""
+    agent_config = state.get("_config")
+    browser_tools = state.get("_browser_tools")
     
-    Args:
-        state: Current graph state
-        config: Runtime configuration (contains browser_tools)
-        
-    Returns:
-        Updated state
-    """
-    agent_config = config.get("agent_config")
-    browser_tools = config.get("browser_tools")
+    if not agent_config:
+        from ...config import AgentConfig
+        agent_config = AgentConfig()
     
     agent = BrowserAgentNode(agent_config, browser_tools)
     return agent.execute(state)
+

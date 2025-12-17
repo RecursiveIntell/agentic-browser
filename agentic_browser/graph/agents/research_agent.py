@@ -171,10 +171,15 @@ REMINDER: Visit 2-3 actual sources, then synthesize with "done".
             return {"action": "done", "args": {"summary": "Failed to parse action"}}
 
 
-def research_agent_node(state: AgentState, config: dict) -> AgentState:
+def research_agent_node(state: AgentState) -> AgentState:
     """LangGraph node function for research agent."""
-    agent_config = config.get("agent_config")
-    browser_tools = config.get("browser_tools")
+    agent_config = state.get("_config")
+    browser_tools = state.get("_browser_tools")
+    
+    if not agent_config:
+        from ...config import AgentConfig
+        agent_config = AgentConfig()
     
     agent = ResearchAgentNode(agent_config, browser_tools)
     return agent.execute(state)
+

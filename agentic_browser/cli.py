@@ -235,11 +235,11 @@ def run_graph_command(args: argparse.Namespace, config: AgentConfig, console: Co
     os_tools = OSTools(config)
     browser_tools = None  # Will be initialized when browser is needed
     
-    # Create runner (checkpointing disabled for now - requires proper thread_id config)
+    # Create runner with checkpointing for session persistence
     runner = MultiAgentRunner(
         config=config,
         os_tools=os_tools,
-        enable_checkpointing=False,
+        enable_checkpointing=True,
     )
     
     try:

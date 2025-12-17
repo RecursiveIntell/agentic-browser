@@ -159,18 +159,15 @@ Data collected so far:
             return {"action": "done", "args": {"summary": "Failed to parse action"}}
 
 
-def os_agent_node(state: AgentState, config: dict) -> AgentState:
-    """LangGraph node function for OS agent.
+def os_agent_node(state: AgentState) -> AgentState:
+    """LangGraph node function for OS agent."""
+    agent_config = state.get("_config")
+    os_tools = state.get("_os_tools")
     
-    Args:
-        state: Current graph state
-        config: Runtime configuration (contains os_tools)
-        
-    Returns:
-        Updated state
-    """
-    agent_config = config.get("agent_config")
-    os_tools = config.get("os_tools")
+    if not agent_config:
+        from ...config import AgentConfig
+        agent_config = AgentConfig()
     
     agent = OSAgentNode(agent_config, os_tools)
     return agent.execute(state)
+

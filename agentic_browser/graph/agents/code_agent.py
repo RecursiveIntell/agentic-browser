@@ -172,10 +172,15 @@ TIPS:
             return {"action": "done", "args": {"summary": "Failed to parse action"}}
 
 
-def code_agent_node(state: AgentState, config: dict) -> AgentState:
+def code_agent_node(state: AgentState) -> AgentState:
     """LangGraph node function for code agent."""
-    agent_config = config.get("agent_config")
-    os_tools = config.get("os_tools")
+    agent_config = state.get("_config")
+    os_tools = state.get("_os_tools")
+    
+    if not agent_config:
+        from ...config import AgentConfig
+        agent_config = AgentConfig()
     
     agent = CodeAgentNode(agent_config, os_tools)
     return agent.execute(state)
+
