@@ -231,60 +231,81 @@ def run_graph_command(args: argparse.Namespace, config: AgentConfig, console: Co
     console.print(f"[dim]Goal: {config.goal}[/dim]")
     console.print()
     
-    # Initialize tools
+    # Initialize OS tools
     os_tools = OSTools(config)
-    browser_tools = BrowserTools(config)  # Initialize browser tools for research/browser agents
     
-    # Create runner with checkpointing (tools stored in registry, not state)
-    runner = MultiAgentRunner(
-        config=config,
-        os_tools=os_tools,
-        browser_tools=browser_tools,
-        enable_checkpointing=True,
-    )
+    # Launch browser and initialize BrowserTools
+    from playwright.sync_api import sync_playwright
     
-    try:
-        # Stream execution for real-time output
-        console.print("[bold]Starting multi-agent execution...[/bold]")
-        console.print()
+    with sync_playwright() as playwright:
+        # Launch browser
+        browser = playwright.chromium.launch(headless=config.headless)
+        context = browser.new_context(
+            viewport={"width": 1280, "height": 800},
+            user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+        )
+        page = context.new_page()
         
-        for event in runner.stream(config.goal, config.max_steps):
-            # Display agent activity
-            for node_name, state_update in event.items():
-                if node_name == "supervisor":
-                    domain = state_update.get("current_domain", "")
-                    console.print(f"[cyan]Supervisor[/cyan] → routing to [yellow]{domain}[/yellow]")
-                else:
-                    step = state_update.get("step_count", 0)
-                    console.print(f"  [dim]Step {step}:[/dim] [green]{node_name}[/green] agent active")
-                
-                # Check for completion
-                if state_update.get("task_complete"):
-                    console.print()
-                    console.print("[bold green]✓ Task completed![/bold green]")
-                    answer = state_update.get("final_answer", "")
-                    if answer:
+        # Create BrowserTools with the page
+        browser_tools = BrowserTools(page)
+        
+        # Create runner with checkpointing
+        runner = MultiAgentRunner(
+            config=config,
+            os_tools=os_tools,
+            browser_tools=browser_tools,
+            enable_checkpointing=True,
+        )
+        
+        try:
+            # Stream execution for real-time output
+            console.print("[bold]Starting multi-agent execution...[/bold]")
+            console.print()
+            
+            for event in runner.stream(config.goal, config.max_steps):
+                # Display agent activity
+                for node_name, state_update in event.items():
+                    if node_name == "supervisor":
+                        domain = state_update.get("current_domain", "")
+                        console.print(f"[cyan]Supervisor[/cyan] → routing to [yellow]{domain}[/yellow]")
+                    else:
+                        step = state_update.get("step_count", 0)
+                        console.print(f"  [dim]Step {step}:[/dim] [green]{node_name}[/green] agent active")
+                    
+                    # Check for completion
+                    if state_update.get("task_complete"):
                         console.print()
-                        console.print("[bold]Final Answer:[/bold]")
-                        console.print(answer)
-                    return 0
-                
-                # Check for error
-                error = state_update.get("error")
-                if error:
-                    console.print(f"[red]Error: {error}[/red]")
-        
-        console.print("\n[yellow]Execution ended (no explicit completion)[/yellow]")
-        return 1
-        
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Interrupted by user[/yellow]")
-        return 130
-    except Exception as e:
-        console.print(f"[bold red]Graph execution error: {e}[/bold red]")
-        import traceback
-        traceback.print_exc()
-        return 1
+                        console.print("[bold green]✓ Task completed![/bold green]")
+                        answer = state_update.get("final_answer", "")
+                        if answer:
+                            console.print()
+                            console.print("[bold]Final Answer:[/bold]")
+                            console.print(answer)
+                        return 0
+                    
+                    # Check for error
+                    error = state_update.get("error")
+                    if error:
+                        console.print(f"[red]Error: {error}[/red]")
+            
+            console.print("\n[yellow]Execution ended (no explicit completion)[/yellow]")
+            return 1
+            
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Interrupted by user[/yellow]")
+            return 1
+            
+        except Exception as e:
+            console.print(f"\n[red]Graph execution error: {e}[/red]")
+            import traceback
+            traceback.print_exc()
+            return 1
+            
+        finally:
+            # Cleanup
+            runner.cleanup()
+            context.close()
+            browser.close()
 
 
 def gui_command() -> int:
