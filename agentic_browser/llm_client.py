@@ -166,6 +166,12 @@ HANDLE FAILURES GRACEFULLY:
 - Don't retry the same failing command with slight variations
 - Summarize what you COULD access
 
+⚠️ CASE SENSITIVITY: Linux filesystems are case-sensitive!
+- If user says "coding" but you see "Coding", they mean the same thing!
+- Always look for case variations: coding = Coding = CODING
+- Match directories/files by ignoring case when the user's intent is clear
+- Don't say "directory doesn't exist" if a case variant exists!
+
 Risk classification:
 - HIGH: rm, dd, mkfs, sudo, chmod -R, chown -R, writing to /etc /usr /bin
 - MEDIUM: writing files, running scripts, modifying configs
