@@ -174,13 +174,19 @@ TIPS:
 
 def code_agent_node(state: AgentState) -> AgentState:
     """LangGraph node function for code agent."""
-    agent_config = state.get("_config")
-    os_tools = state.get("_os_tools")
+    from ..tool_registry import get_tools
     
-    if not agent_config:
+    # Get tools from registry using session_id
+    tools = get_tools(state.get("session_id", ""))
+    if tools:
+        agent_config = tools.config
+        os_tools = tools.os_tools
+    else:
         from ...config import AgentConfig
         agent_config = AgentConfig()
+        os_tools = None
     
     agent = CodeAgentNode(agent_config, os_tools)
     return agent.execute(state)
+
 

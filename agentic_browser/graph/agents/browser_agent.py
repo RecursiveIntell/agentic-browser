@@ -192,13 +192,19 @@ Your task: {state['goal']}
 
 def browser_agent_node(state: AgentState) -> AgentState:
     """LangGraph node function for browser agent."""
-    agent_config = state.get("_config")
-    browser_tools = state.get("_browser_tools")
+    from ..tool_registry import get_tools
     
-    if not agent_config:
+    # Get tools from registry using session_id
+    tools = get_tools(state.get("session_id", ""))
+    if tools:
+        agent_config = tools.config
+        browser_tools = tools.browser_tools
+    else:
         from ...config import AgentConfig
         agent_config = AgentConfig()
+        browser_tools = None
     
     agent = BrowserAgentNode(agent_config, browser_tools)
     return agent.execute(state)
+
 

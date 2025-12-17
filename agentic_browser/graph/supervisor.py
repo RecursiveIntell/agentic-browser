@@ -211,11 +211,16 @@ If the worker agent completed with a final answer, synthesize and return done.
 
 def supervisor_node(state: AgentState) -> AgentState:
     """LangGraph node function for supervisor."""
-    # Config is stored in state by MultiAgentRunner
-    agent_config = state.get("_config")
-    if not agent_config:
+    from .tool_registry import get_tools
+    
+    # Get config from registry using session_id
+    tools = get_tools(state.get("session_id", ""))
+    if tools:
+        agent_config = tools.config
+    else:
         # Fallback: create default config
         agent_config = AgentConfig()
+    
     supervisor = Supervisor(agent_config)
     return supervisor.route(state)
 

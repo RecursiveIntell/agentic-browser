@@ -92,30 +92,37 @@ class MultiAgentRunner:
             os_tools: Optional OSTools instance
             enable_checkpointing: Enable session persistence
         """
+        import uuid
+        from .tool_registry import ToolRegistry
+        
         self.config = config
         self.browser_tools = browser_tools
         self.os_tools = os_tools
+        self.enable_checkpointing = enable_checkpointing
+        
+        # Generate session ID and register tools
+        self.session_id = str(uuid.uuid4())
+        self._registry = ToolRegistry.get_instance()
+        self._registry.register(
+            self.session_id,
+            config=config,
+            browser_tools=browser_tools,
+            os_tools=os_tools,
+        )
         
         # Build graph
         checkpointer = MemorySaver() if enable_checkpointing else None
         self.graph = build_agent_graph(checkpointer)
-        
-        # Runtime config passed to all nodes
-        self.runtime_config = {
-            "agent_config": config,
-            "browser_tools": browser_tools,
-            "os_tools": os_tools,
-        }
     
     def set_browser_tools(self, browser_tools) -> None:
         """Set browser tools after initialization."""
         self.browser_tools = browser_tools
-        self.runtime_config["browser_tools"] = browser_tools
+        self._registry.update_browser_tools(self.session_id, browser_tools)
     
     def set_os_tools(self, os_tools) -> None:
         """Set OS tools after initialization."""
         self.os_tools = os_tools
-        self.runtime_config["os_tools"] = os_tools
+        self._registry.update_os_tools(self.session_id, os_tools)
     
     def run(self, goal: str, max_steps: int = 30) -> dict[str, Any]:
         """Run the multi-agent system on a goal.
@@ -127,15 +134,11 @@ class MultiAgentRunner:
         Returns:
             Final state dict
         """
-        import uuid
-        
-        # Create initial state with config and tools embedded
+        # Create initial state with session_id for tool lookup
         initial_state = create_initial_state(
             goal=goal,
             max_steps=max_steps,
-            config=self.config,
-            browser_tools=self.browser_tools,
-            os_tools=self.os_tools,
+            session_id=self.session_id,
         )
         
         # Run the graph with thread_id for checkpointer
@@ -143,7 +146,7 @@ class MultiAgentRunner:
             initial_state,
             config={
                 "configurable": {
-                    "thread_id": str(uuid.uuid4()),
+                    "thread_id": self.session_id,
                 }
             },
         )
@@ -160,26 +163,26 @@ class MultiAgentRunner:
         Yields:
             State updates as they occur
         """
-        import uuid
-        
-        # Create initial state with config and tools embedded
+        # Create initial state with session_id for tool lookup
         initial_state = create_initial_state(
             goal=goal,
             max_steps=max_steps,
-            config=self.config,
-            browser_tools=self.browser_tools,
-            os_tools=self.os_tools,
+            session_id=self.session_id,
         )
         
         for event in self.graph.stream(
             initial_state,
             config={
                 "configurable": {
-                    "thread_id": str(uuid.uuid4()),
+                    "thread_id": self.session_id,
                 }
             },
         ):
             yield event
+    
+    def cleanup(self) -> None:
+        """Unregister tools from registry."""
+        self._registry.unregister(self.session_id)
     
     def get_result(self, state: dict) -> str:
         """Extract final answer from state.
