@@ -85,15 +85,28 @@ Respond with JSON:
                 error="OS tools not initialized",
             )
         
-        # Build context
+        # Build context with error history
+        last_error = state.get('error', '')
+        
         task_context = f"""
 Your task: {state['goal']}
+
+USER HOME DIRECTORY: /home/sikmindz
+COMMON DIRECTORIES: ~/Coding, ~/Documents, ~/Downloads
+
+IMPORTANT - Previous error (if any): {last_error or '(none)'}
 
 Files already accessed:
 {chr(10).join(f'- {f}' for f in state['files_accessed'][-10:]) or '(none yet)'}
 
 Data collected so far:
 {json.dumps(state['extracted_data'], indent=2)[:1000]}
+
+EXPLORATION STRATEGY:
+1. If you get "Path does not exist", use ABSOLUTE paths starting with /home/sikmindz/
+2. Start by listing /home/sikmindz/Coding to find projects
+3. Use "os_exec" with "find /home/sikmindz/Coding -name '*cat*' -type d" to search
+4. DON'T repeat the same failed path - try a different approach!
 """
         
         messages = self._build_messages(state, task_context)
