@@ -59,11 +59,17 @@ def build_agent_graph(checkpointer: MemorySaver | None = None):
         }
     )
     
-    # All worker agents return to supervisor
-    graph.add_edge("browser", "supervisor")
-    graph.add_edge("os", "supervisor")
-    graph.add_edge("research", "supervisor")
-    graph.add_edge("code", "supervisor")
+    # Function to check if task is complete
+    def check_task_complete(state: AgentState) -> str:
+        if state.get("task_complete"):
+            return "__end__"
+        return "supervisor"
+    
+    # Worker agents: return to supervisor OR end if task complete
+    graph.add_conditional_edges("browser", check_task_complete, {"supervisor": "supervisor", "__end__": END})
+    graph.add_conditional_edges("os", check_task_complete, {"supervisor": "supervisor", "__end__": END})
+    graph.add_conditional_edges("research", check_task_complete, {"supervisor": "supervisor", "__end__": END})
+    graph.add_conditional_edges("code", check_task_complete, {"supervisor": "supervisor", "__end__": END})
     
     # Compile with optional checkpointer
     if checkpointer:
@@ -175,7 +181,8 @@ class MultiAgentRunner:
             config={
                 "configurable": {
                     "thread_id": self.session_id,
-                }
+                },
+                "recursion_limit": 50,  # Allow more agent interactions
             },
         ):
             yield event
