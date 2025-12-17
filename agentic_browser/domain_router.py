@@ -44,7 +44,8 @@ class DomainRouter:
         # High weight (0.3)
         "website": 0.3, "webpage": 0.3, "browser": 0.3, "chrome": 0.3,
         "firefox": 0.3, "url": 0.3, "http": 0.3, "https": 0.3,
-        "google": 0.25, "search engine": 0.25,
+        "google": 0.25, "search engine": 0.25, "internet": 0.3,
+        "research": 0.35, "find out": 0.25, "look up": 0.25,
         
         # Medium weight (0.2)
         "click": 0.2, "scroll": 0.2, "navigate": 0.2, "login": 0.2,
@@ -52,7 +53,7 @@ class DomainRouter:
         "link": 0.2, "page": 0.15, "site": 0.15, "web": 0.15,
         
         # Lower weight (0.1)
-        "search": 0.1, "download page": 0.15, "online": 0.1,
+        "search": 0.15, "download page": 0.15, "online": 0.15,
         "article": 0.1, "blog": 0.1, "news": 0.1,
     }
     
@@ -64,7 +65,8 @@ class DomainRouter:
         "folder": 0.25, "chmod": 0.3, "chown": 0.3,
         "hard drive": 0.4, "harddrive": 0.4, "drive": 0.3,
         "my files": 0.35, "my computer": 0.35, "my system": 0.3,
-        "contents of": 0.25,
+        "contents of": 0.25, "code": 0.25, "repo": 0.25, "repository": 0.25,
+        "debug": 0.2, "fix": 0.2, "analyze": 0.2,
         
         # Medium weight (0.2)
         "file": 0.15, "files": 0.15, "create file": 0.25, "delete file": 0.25,
@@ -73,6 +75,7 @@ class DomainRouter:
         "install": 0.2, "apt": 0.25, "dnf": 0.25, "yum": 0.25,
         "pip": 0.2, "npm": 0.2, "systemctl": 0.3,
         "disk": 0.25, "storage": 0.2,
+        "git": 0.25, "pull": 0.2, "push": 0.2,
         
         # Lower weight (0.1)
         "path": 0.1, "local": 0.15, "log": 0.1, "config": 0.1, "system": 0.1,

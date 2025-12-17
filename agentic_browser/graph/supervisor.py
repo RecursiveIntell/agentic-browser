@@ -105,7 +105,8 @@ When completing, synthesize ALL gathered data into a useful report:
         # First routing: use heuristic domain router
         if state["step_count"] == 0:
             decision = self.domain_router.route(state["goal"])
-            initial_domain = self._map_domain(decision.domain)
+            initial_domain = self._refine_initial_domain(decision.domain, state["goal"])
+            
             return {
                 **state,
                 "current_domain": initial_domain,
@@ -144,6 +145,35 @@ When completing, synthesize ALL gathered data into a useful report:
                 "error": f"Supervisor error: {str(e)}",
                 "step_count": state["step_count"] + 1,
             }
+    
+    def _refine_initial_domain(self, domain: str, goal: str) -> str:
+        """Refine the rough domain decision into a specific agent."""
+        goal_lower = goal.lower()
+        
+        if domain == "browser":
+            # Check for research intent
+            research_keywords = ["research", "find out", "look up", "synthesize", "compare", "what is", "who is", "search"]
+            if any(k in goal_lower for k in research_keywords):
+                return "research"
+            return "browser"
+            
+        elif domain == "os":
+            # Check for code intent
+            code_keywords = ["analyze", "debug", "fix", "code", "repo", "project", "explain", "how does"]
+            if any(k in goal_lower for k in code_keywords):
+                return "code"
+            return "os"
+            
+        elif domain == "both":
+            # Disambiguate based on primary intent
+            if "research" in goal_lower or "find" in goal_lower:
+                return "research"
+            if "analyze" in goal_lower or "code" in goal_lower:
+                return "code"
+            # Default to research for mixed queries as it's safer
+            return "research"
+            
+        return "browser"  # Fallback
     
     def _build_messages(self, state: AgentState) -> list:
         """Build messages for supervisor decision."""
