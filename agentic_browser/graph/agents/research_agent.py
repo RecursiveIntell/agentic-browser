@@ -377,7 +377,7 @@ Data collected:
                 else:
                     content_str = str(result.data) if result.data else str(result.message)
                 
-                # Quality check: detect paywalls, access denied, cookies notices
+                # Quality check: detect paywalls, access denied, CAPTCHA, etc.
                 lower_content = content_str.lower()[:1000]
                 is_low_quality = any(phrase in lower_content for phrase in [
                     "access denied", "403 forbidden", "404 not found",
@@ -385,6 +385,8 @@ Data collected:
                     "please enable javascript", "browser not supported",
                     "captcha", "robot", "cookies must be enabled",
                     "sign in to continue", "create an account to",
+                    "verify you", "human verification", "are you human",
+                    "security check", "checking your browser", "just a moment",
                 ])
                 
                 if is_low_quality and len(content_str) < 500:
@@ -428,14 +430,17 @@ Data collected:
                 
             tool_msg = HumanMessage(content=f"Tool output: {tool_content}")
             
-            # Track clicked selectors to avoid re-clicking
+            # Track clicked selectors to avoid re-clicking (including FAILED clicks)
             # NOTE: Without operator.add, we manually copy and extend the list
             existing_clicked = list(state.get('clicked_selectors', []))
-            if action_data.get("action") == "click" and result.success:
+            if action_data.get("action") == "click":
                 selector = action_data.get("args", {}).get("selector", "")
                 if selector and selector not in existing_clicked:
-                    print(f"[RESEARCH DEBUG] Click successful, adding selector: {selector}")
-                    existing_clicked.append(selector)
+                    if result.success:
+                        print(f"[RESEARCH DEBUG] Click successful, adding selector: {selector}")
+                    else:
+                        print(f"[RESEARCH DEBUG] Click FAILED, marking selector as tried: {selector}")
+                    existing_clicked.append(selector)  # Add both success AND failed clicks
             
             new_state = self._update_state(
                 state,
