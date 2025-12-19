@@ -299,11 +299,12 @@ Data collected:
                         extracted_data={"research_findings": summary},
                     )
             
-            # If there are consecutive errors (failed clicks), force scroll + extract
-            # This helps when LLM is hallucinating selectors that don't exist
-            consecutive_errors = state.get('consecutive_errors', 0)
-            if consecutive_errors >= 2 and action_data.get("action") == "click":
-                print(f"[RESEARCH] ⚠️ {consecutive_errors} consecutive errors - forcing scroll to find real links")
+            # If there are recent failed clicks, force scroll to find real links
+            # Check last 3 messages for click failure patterns
+            recent_msgs = state.get('messages', [])[-6:]  # Last 3 pairs of messages
+            recent_fails = sum(1 for m in recent_msgs if hasattr(m, 'content') and 'Could not click' in str(m.content))
+            if recent_fails >= 2 and action_data.get("action") == "click":
+                print(f"[RESEARCH] ⚠️ {recent_fails} recent click failures - forcing scroll to find real links")
                 action_data = {"action": "scroll", "args": {"amount": 800}}
             
             # Detect duplicate click and force scroll instead
