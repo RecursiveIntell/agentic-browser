@@ -253,18 +253,24 @@ When completing, synthesize ALL gathered data into a useful report:
                     'who is', 'give me', 'report', 'summarize', 'website', 'websites'
                 ])
                 
-                # Count research sources
-                research_sources = len([k for k in state['extracted_data'].keys() if 'research_source' in k])
+                # Count UNIQUE content sites visited (excluding search engines)
+                search_engines = ['duckduckgo.com', 'google.com/search', 'bing.com/search', 'yahoo.com/search']
+                content_urls = [
+                    u for u in state.get('visited_urls', []) 
+                    if u and not any(se in u.lower() for se in search_engines)
+                ]
+                unique_sites = set(u.split('?')[0].rstrip('/') for u in content_urls)
+                sites_visited = len(unique_sites)
                 
                 # Check if user specified minimum sources (e.g., "at least 3 websites")
                 import re
                 source_match = re.search(r'at least (\d+)', goal_lower) or re.search(r'(\d+)\s*(?:websites?|sources?|pages?)', goal_lower)
                 min_required_sources = int(source_match.group(1)) if source_match else 3
                 
-                # For research tasks, require minimum sources
-                if is_research_goal and research_sources < min_required_sources:
-                    print(f"[DEBUG] Supervisor - BLOCKED 'done': research task has only {research_sources}/{min_required_sources} sources")
-                    decision = {"route_to": "research", "rationale": f"Need {min_required_sources - research_sources} more sources before completing"}
+                # For research tasks, require minimum unique sites visited
+                if is_research_goal and sites_visited < min_required_sources:
+                    print(f"[DEBUG] Supervisor - BLOCKED 'done': research task has only visited {sites_visited}/{min_required_sources} unique sites")
+                    decision = {"route_to": "research", "rationale": f"Need to visit {min_required_sources - sites_visited} more unique websites before completing"}
                 
                 elif state["step_count"] < MIN_STEPS_BEFORE_DONE:
                     print(f"[DEBUG] Supervisor - BLOCKED 'done': step_count ({state['step_count']}) < MIN_STEPS ({MIN_STEPS_BEFORE_DONE})")

@@ -197,9 +197,16 @@ Action: {"action": "done", "args": {"summary": "## Research Report\\n\\n[Your de
         # Minimum sources required for completion
         MIN_SOURCES_REQUIRED = 3
         
-        # Calculate progress
-        sources_extracted = len([k for k in state['extracted_data'].keys() if 'research_source' in k or 'browser_extract' in k])
-        sources_needed = max(0, MIN_SOURCES_REQUIRED - sources_extracted)
+        # Calculate progress based on UNIQUE content URLs visited (excluding search engines)
+        search_engines = ['duckduckgo.com', 'google.com/search', 'bing.com/search', 'yahoo.com/search']
+        content_urls = [
+            u for u in state.get('visited_urls', []) 
+            if u and not any(se in u.lower() for se in search_engines)
+        ]
+        # Dedupe by base URL (before query params)
+        unique_sites = set(u.split('?')[0].rstrip('/') for u in content_urls)
+        sources_visited = len(unique_sites)
+        sources_needed = max(0, MIN_SOURCES_REQUIRED - sources_visited)
         
         # Strong progress indicator
         if sources_needed > 0:
@@ -246,7 +253,7 @@ DO NOT make up link titles!
 RESEARCH TASK: {state['goal']}
 
 === PROGRESS ===
-Sources extracted: {sources_extracted}/{MIN_SOURCES_REQUIRED}
+Unique websites visited: {sources_visited}/{MIN_SOURCES_REQUIRED}
 {progress_msg}
 {clicked_warning}
 Visited URLs: {chr(10).join(state['visited_urls'][-5:]) or '(none)'}
@@ -274,18 +281,23 @@ Data collected:
             
             if action_data.get("action") == "done":
                 # HARD BLOCK: Reject 'done' if insufficient research content
-                research_source_count = len([
-                    k for k in state['extracted_data'].keys() 
-                    if 'research_source' in k
-                ])
+                # Check unique content sites visited (reuse logic from above)
+                search_engines = ['duckduckgo.com', 'google.com/search', 'bing.com/search', 'yahoo.com/search']
+                content_urls = [
+                    u for u in state.get('visited_urls', []) 
+                    if u and not any(se in u.lower() for se in search_engines)
+                ]
+                unique_sites = set(u.split('?')[0].rstrip('/') for u in content_urls)
+                sites_visited = len(unique_sites)
                 
                 MIN_SOURCES = 3
                 
-                if research_source_count < MIN_SOURCES:
-                    # Force extraction instead of allowing premature completion
+                if sites_visited < MIN_SOURCES:
+                    # Need to visit more sites - force extraction won't help, need to navigate
+                    print(f"[RESEARCH] Blocking done: only visited {sites_visited}/{MIN_SOURCES} unique sites")
                     action_data = {
-                        "action": "extract_visible_text",
-                        "args": {"max_chars": 8000}
+                        "action": "back",  # Go back to find more sources
+                        "args": {}
                     }
                     # Fall through to execute this action
                 else:
