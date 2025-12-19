@@ -111,10 +111,13 @@ Respond with JSON:
         # Build context from current page state
         page_state = self._get_page_state()
         current_url = page_state.get('url', 'about:blank')
-        current_step = state.get('current_step', 0)
         
-        # Detect if we're on an images page - give strong hint to download
-        is_images_page = any(x in current_url.lower() for x in [
+        # Get step count - NOTE: state uses 'step_count' not 'current_step'
+        step_count = state.get('step_count', 0)
+        
+        # Detect if we're on an images page
+        url_lower = current_url.lower()
+        is_images_page = any(x in url_lower for x in [
             '/images', 'images.', 'pixabay', 'pexels', 'unsplash', 
             'ia=images', 'iax=images', 'tbm=isch',  # DuckDuckGo and Google image params
             'image', 'photo', 'pic', 'jpg', 'png'
@@ -127,12 +130,16 @@ Respond with JSON:
             'find image', 'picture of', 'image of', 'photo of'
         ])
         
+        # Debug logging for auto-download conditions
+        print(f"[BROWSER DEBUG] URL: {current_url[:80]}...")
+        print(f"[BROWSER DEBUG] step_count={step_count}, is_images_page={is_images_page}, is_image_download_goal={is_image_download_goal}")
+        
         # === SMART AUTO-DOWNLOAD ===
         # If we're on an images page, goal is to download an image, and we've been trying for a while
         # Just automatically download the image instead of asking the LLM (which keeps ignoring it)
-        if is_images_page and is_image_download_goal and current_step >= 8:
-            print(f"[BROWSER] 🔄 Auto-download triggered: on images page (step {current_step}), executing download_image")
-            logger.info(f"Auto-download: images page detected, goal involves images, step {current_step}")
+        if is_images_page and is_image_download_goal and step_count >= 6:
+            print(f"[BROWSER] 🔄 AUTO-DOWNLOAD TRIGGERED! step={step_count}, executing download_image")
+            logger.info(f"Auto-download: images page detected, goal involves images, step {step_count}")
             
             result = self._browser_tools.execute("download_image", {})
             
@@ -146,9 +153,12 @@ Respond with JSON:
                         "downloaded_image": download_path,
                         "image_filename": result.data.get("filename", "") if result.data else "",
                     },
+                    # Mark as complete since we downloaded the image
+                    task_complete=True,
+                    final_answer=f"Downloaded image to: {download_path}",
                 )
             else:
-                # Download failed, let agent try other approaches
+                # Download failed, log and let agent try other approaches
                 print(f"[BROWSER] ⚠️ Auto-download failed: {result.message}")
         
         image_download_hint = ""
