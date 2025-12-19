@@ -210,16 +210,32 @@ class MultiAgentRunner:
             session_id=self.session_id,
         )
         
-        for event in self.graph.stream(
-            initial_state,
-            config={
-                "configurable": {
-                    "thread_id": self.session_id,
+        try:
+            for event in self.graph.stream(
+                initial_state,
+                config={
+                    "configurable": {
+                        "thread_id": self.session_id,
+                    },
+                    "recursion_limit": 50,  # Allow more agent interactions
                 },
-                "recursion_limit": 50,  # Allow more agent interactions
-            },
-        ):
-            yield event
+            ):
+                yield event
+        except Exception as e:
+            error_msg = str(e).lower()
+            # Handle empty response errors from Anthropic/OpenAI
+            if "empty" in error_msg or "must contain" in error_msg:
+                print(f"[WARN] Graph stream error (empty response): {e}")
+                # Yield a final state with error message
+                yield {
+                    "supervisor": {
+                        "task_complete": True,
+                        "final_answer": "Model returned an empty response. Please try again.",
+                        "error": str(e),
+                    }
+                }
+            else:
+                raise
     
     def cleanup(self) -> None:
         """Unregister tools from registry."""
