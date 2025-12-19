@@ -54,6 +54,9 @@ class AgentState(TypedDict):
     # Research agent: track clicked links to avoid re-clicking
     # NOTE: Not using operator.add here - we manually manage this list to avoid exponential growth
     clicked_selectors: list[str]
+    
+    # Track if last action was scroll - forces extract on next step to update context
+    last_action_was_scroll: bool
 
 
 def create_initial_state(
@@ -90,5 +93,6 @@ def create_initial_state(
         approved_actions=[],
         session_id=session_id,
         clicked_selectors=[],
+        last_action_was_scroll=False,
     )
 

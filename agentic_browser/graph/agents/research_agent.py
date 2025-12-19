@@ -321,8 +321,9 @@ Data collected:
                 recent_fails += 1
             
             # Check if we just scrolled - if so, force extract to update context
-            just_scrolled = state.get('_just_scrolled', False)
-            if just_scrolled and action_data.get("action") == "click":
+            last_action_was_scroll = state.get('last_action_was_scroll', False)
+            print(f"[RESEARCH DEBUG] last_action_was_scroll={last_action_was_scroll}, action={action_data.get('action')}")
+            if last_action_was_scroll and action_data.get("action") == "click":
                 # LLM is trying to click but hasn't seen new content after scroll
                 print(f"[RESEARCH] 📋 Just scrolled - forcing extract to show new visible content before clicking")
                 action_data = {"action": "extract_visible_text", "args": {"max_chars": 4000}}
@@ -502,10 +503,10 @@ Data collected:
             
             # Track scroll state - set flag when scroll, clear when extract
             if action_data.get("action") == "scroll":
-                new_state['_just_scrolled'] = True
+                new_state['last_action_was_scroll'] = True
                 print("[RESEARCH] 📜 Scrolled - will force extract on next step to update context")
             elif action_data.get("action") == "extract_visible_text":
-                new_state['_just_scrolled'] = False
+                new_state['last_action_was_scroll'] = False
             
             return new_state
             
