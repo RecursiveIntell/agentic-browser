@@ -431,16 +431,45 @@ If the worker agent completed with a final answer, synthesize and return done.
         if not data:
             return "No data collected during the task."
         
+        def clean_content(text: str, max_len: int = 500) -> str:
+            """Clean up webpage content for display."""
+            text = str(text)
+            # Remove common webpage navigation junk
+            for noise in ["Main menu", "Jump to content", "Toggle the table", 
+                         "Contents hide", "Create account", "Log in", "Personal tools"]:
+                text = text.replace(noise, "")
+            # Clean up whitespace
+            text = ' '.join(text.split())
+            return text[:max_len]
+        
         # Categorize data by source type
         research_data = {k: v for k, v in data.items() if 'research' in k.lower()}
         code_data = {k: v for k, v in data.items() if 'code' in k.lower()}
-        browser_data = {k: v for k, v in data.items() if 'browser' in k.lower()}
+        network_data = {k: v for k, v in data.items() if 'network' in k.lower()}
+        sysadmin_data = {k: v for k, v in data.items() if 'sysadmin' in k.lower()}
         other_data = {k: v for k, v in data.items() 
-                      if not any(x in k.lower() for x in ['research', 'code', 'browser'])}
+                      if not any(x in k.lower() for x in ['research', 'code', 'network', 'sysadmin'])}
         
         # Build report
         report = f"## Report: {state['goal']}\n\n"
         report += f"**Total items collected:** {len(data)}\n\n"
+        
+        # Include network diagnostics if present
+        if network_data:
+            report += f"### Network Results\n\n"
+            for key, content in network_data.items():
+                if isinstance(content, dict):
+                    report += f"- **{key}**: {json.dumps(content)[:300]}\n"
+                else:
+                    report += f"- **{key}**: {clean_content(str(content), 300)}\n"
+            report += "\n"
+        
+        # Include sysadmin data if present
+        if sysadmin_data:
+            report += f"### System Information\n\n"
+            for key, content in sysadmin_data.items():
+                report += f"- **{key}**: {clean_content(str(content), 300)}\n"
+            report += "\n"
         
         # Include code analysis if present
         if 'code_analysis' in data:
@@ -450,23 +479,24 @@ If the worker agent completed with a final answer, synthesize and return done.
         if research_data:
             report += f"### Research Findings ({len(research_data)} sources)\n\n"
             for i, (key, content) in enumerate(list(research_data.items())[:3], 1):
-                report += f"**Source {i}:** {str(content)[:500]}\n\n"
+                cleaned = clean_content(content, 600)
+                report += f"**Source {i}:** {cleaned}\n\n"
         
         # Include code findings if present (exclude code_analysis already shown)
         code_findings = {k: v for k, v in code_data.items() if k != 'code_analysis'}
         if code_findings:
             report += f"### Code Exploration ({len(code_findings)} files examined)\n\n"
-            # Show a few key findings
             for i, (key, content) in enumerate(list(code_findings.items())[:3], 1):
-                content_preview = str(content)[:300].replace('\n', ' ')
+                content_preview = clean_content(str(content), 300)
                 report += f"- {key}: {content_preview}...\n"
             report += "\n"
         
-        # Include browser findings if present
-        if browser_data:
-            report += f"### Browser Findings ({len(browser_data)} pages)\n\n"
-            for i, (key, content) in enumerate(list(browser_data.items())[:3], 1):
-                report += f"{str(content)[:500]}\n\n"
+        # Include other data
+        if other_data:
+            report += f"### Additional Findings\n\n"
+            for key, content in list(other_data.items())[:3]:
+                report += f"- **{key}**: {clean_content(str(content), 200)}\n"
+            report += "\n"
         
         return report
 
