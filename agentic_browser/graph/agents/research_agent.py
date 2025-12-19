@@ -131,7 +131,7 @@ Respond with JSON:
         
         # Build context showing progress
         sources_visited = len([u for u in state['visited_urls'] if u and 'duckduckgo' not in u])
-        current_url = page_state.get('url', 'about:blank')
+        current_url = page_state.get('current_url', '') or page_state.get('url', 'about:blank')
         
         # Determine next action hint
         # Loop Protection & Intelligent Hints
@@ -216,7 +216,7 @@ Sources extracted: {sources_extracted}/{MIN_SOURCES_REQUIRED}
 
 Visited URLs: {chr(10).join(state['visited_urls'][-5:]) or '(none)'}
 
-Current page: {page_state.get('title', 'Unknown')}
+Current page: {page_state.get('page_title', '') or page_state.get('title', 'Unknown')}
 URL: {current_url}
 
 {action_hint}
@@ -292,7 +292,7 @@ Data collected:
                 # Get current URL to check if we're on a search engine
                 try:
                     page_state = self._browser_tools.get_page_state()
-                    current_url = page_state.get('url', '')
+                    current_url = page_state.get('current_url', '') or page_state.get('url', '')
                 except:
                     current_url = ''
                 

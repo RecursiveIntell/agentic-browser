@@ -110,7 +110,7 @@ Respond with JSON:
         
         # Build context from current page state
         page_state = self._get_page_state()
-        current_url = page_state.get('url', 'about:blank')
+        current_url = page_state.get('current_url', '') or page_state.get('url', 'about:blank')
         
         # Get step count - NOTE: state uses 'step_count' not 'current_step'
         step_count = state.get('step_count', 0)
@@ -171,13 +171,13 @@ Respond with JSON:
         
         task_context = f"""
 Current URL: {current_url}
-Page Title: {page_state.get('title', '')}
+Page Title: {page_state.get('page_title', '') or page_state.get('title', '')}
 {image_download_hint}
 Visible Text (truncated):
 {page_state.get('visible_text', '')[:2000]}
 
 Top Links:
-{self._format_links(page_state.get('links', []))}
+{self._format_links(page_state.get('top_links', []) or page_state.get('links', []))}
 
 Already Visited:
 {chr(10).join(f'- {url}' for url in state['visited_urls'][-5:])}
