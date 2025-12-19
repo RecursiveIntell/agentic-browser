@@ -245,24 +245,36 @@ When completing, synthesize ALL gathered data into a useful report:
             MIN_STEPS_BEFORE_DONE = 5
             
             if decision.get("route_to") == "done":
-                if state["step_count"] < MIN_STEPS_BEFORE_DONE:
+                goal_lower = state['goal'].lower()
+                
+                # Check if this is a research task
+                is_research_goal = any(kw in goal_lower for kw in [
+                    'look up', 'research', 'find out', 'search', 'what is', 
+                    'who is', 'give me', 'report', 'summarize', 'website', 'websites'
+                ])
+                
+                # Count research sources
+                research_sources = len([k for k in state['extracted_data'].keys() if 'research_source' in k])
+                
+                # Check if user specified minimum sources (e.g., "at least 3 websites")
+                import re
+                source_match = re.search(r'at least (\d+)', goal_lower) or re.search(r'(\d+)\s*(?:websites?|sources?|pages?)', goal_lower)
+                min_required_sources = int(source_match.group(1)) if source_match else 3
+                
+                # For research tasks, require minimum sources
+                if is_research_goal and research_sources < min_required_sources:
+                    print(f"[DEBUG] Supervisor - BLOCKED 'done': research task has only {research_sources}/{min_required_sources} sources")
+                    decision = {"route_to": "research", "rationale": f"Need {min_required_sources - research_sources} more sources before completing"}
+                
+                elif state["step_count"] < MIN_STEPS_BEFORE_DONE:
                     print(f"[DEBUG] Supervisor - BLOCKED 'done': step_count ({state['step_count']}) < MIN_STEPS ({MIN_STEPS_BEFORE_DONE})")
                     # Determine which agent to use based on goal
-                    goal_lower = state['goal'].lower()
-                    is_research_goal = any(kw in goal_lower for kw in [
-                        'look up', 'research', 'find out', 'search', 'what is', 
-                        'who is', 'give me', 'report', 'summarize', 'anime', 'movie'
-                    ])
                     fallback_agent = "research" if is_research_goal else "code"
                     decision = {"route_to": fallback_agent, "rationale": "Need more exploration before completing"}
+                    
                 elif not state['extracted_data'] or len(state['extracted_data']) == 0:
                     print(f"[DEBUG] Supervisor - BLOCKED 'done': No extracted_data yet")
                     # Same logic - use research for research goals
-                    goal_lower = state['goal'].lower()
-                    is_research_goal = any(kw in goal_lower for kw in [
-                        'look up', 'research', 'find out', 'search', 'what is',
-                        'who is', 'give me', 'report', 'summarize', 'anime', 'movie'
-                    ])
                     fallback_agent = "research" if is_research_goal else "code"
                     decision = {"route_to": fallback_agent, "rationale": "No data collected yet"}
             
