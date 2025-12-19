@@ -225,7 +225,7 @@ You MUST click a DIFFERENT link or SCROLL DOWN to find more results!
             # If already clicked 2+ unique links, strongly suggest scroll
             if len(unique_clicked) >= 2:
                 clicked_warning += """
-🔽 **SCROLL DOWN to find more search results!** Use: {"action": "scroll", "args": {"direction": "down"}}
+🔽 **SCROLL DOWN to find more search results!** Use: {"action": "scroll", "args": {"amount": 800}}
 """
         else:
             clicked_warning = ""
@@ -295,7 +295,7 @@ Data collected:
                 
                 if selector in unique_clicked:
                     print(f"[RESEARCH] 🔄 Duplicate click detected: {selector[:50]}... - forcing scroll instead")
-                    action_data = {"action": "scroll", "args": {"direction": "down"}}
+                    action_data = {"action": "scroll", "args": {"amount": 800}}
             
             # Execute browser action
             result = self._browser_tools.execute(
@@ -401,13 +401,13 @@ Data collected:
             tool_msg = HumanMessage(content=f"Tool output: {tool_content}")
             
             # Track clicked selectors to avoid re-clicking
-            # Note: clicked_selectors uses operator.add so we return a list to append
-            clicked_to_add = []
+            # NOTE: Without operator.add, we manually copy and extend the list
+            existing_clicked = list(state.get('clicked_selectors', []))
             if action_data.get("action") == "click" and result.success:
                 selector = action_data.get("args", {}).get("selector", "")
-                if selector:
+                if selector and selector not in existing_clicked:
                     print(f"[RESEARCH DEBUG] Click successful, adding selector: {selector}")
-                    clicked_to_add = [selector]
+                    existing_clicked.append(selector)
             
             new_state = self._update_state(
                 state,
@@ -417,9 +417,8 @@ Data collected:
                 error=result.message if not result.success else None,
             )
             
-            # Add clicked selectors (uses operator.add to accumulate)
-            if clicked_to_add:
-                new_state['clicked_selectors'] = clicked_to_add
+            # Set the updated clicked selectors list
+            new_state['clicked_selectors'] = existing_clicked
             
             return new_state
             

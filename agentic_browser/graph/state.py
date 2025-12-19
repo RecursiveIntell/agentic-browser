@@ -52,7 +52,8 @@ class AgentState(TypedDict):
     session_id: str
     
     # Research agent: track clicked links to avoid re-clicking
-    clicked_selectors: Annotated[list[str], operator.add]
+    # NOTE: Not using operator.add here - we manually manage this list to avoid exponential growth
+    clicked_selectors: list[str]
 
 
 def create_initial_state(
