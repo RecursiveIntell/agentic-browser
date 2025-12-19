@@ -111,12 +111,45 @@ Respond with JSON:
         # Build context from current page state
         page_state = self._get_page_state()
         current_url = page_state.get('url', 'about:blank')
+        current_step = state.get('current_step', 0)
         
         # Detect if we're on an images page - give strong hint to download
         is_images_page = any(x in current_url.lower() for x in [
             '/images', 'images.', 'pixabay', 'pexels', 'unsplash', 
+            'ia=images', 'iax=images', 'tbm=isch',  # DuckDuckGo and Google image params
             'image', 'photo', 'pic', 'jpg', 'png'
         ])
+        
+        # Check if goal involves downloading images
+        goal_lower = state['goal'].lower()
+        is_image_download_goal = any(w in goal_lower for w in [
+            'download', 'save', 'get image', 'get picture', 'find picture', 
+            'find image', 'picture of', 'image of', 'photo of'
+        ])
+        
+        # === SMART AUTO-DOWNLOAD ===
+        # If we're on an images page, goal is to download an image, and we've been trying for a while
+        # Just automatically download the image instead of asking the LLM (which keeps ignoring it)
+        if is_images_page and is_image_download_goal and current_step >= 8:
+            print(f"[BROWSER] 🔄 Auto-download triggered: on images page (step {current_step}), executing download_image")
+            logger.info(f"Auto-download: images page detected, goal involves images, step {current_step}")
+            
+            result = self._browser_tools.execute("download_image", {})
+            
+            if result.success:
+                download_path = result.data.get("path", "") if result.data else ""
+                print(f"[BROWSER] ✅ Auto-downloaded image to: {download_path}")
+                return self._update_state(
+                    state,
+                    messages=[AIMessage(content=f"Auto-downloaded image to: {download_path}")],
+                    extracted_data={
+                        "downloaded_image": download_path,
+                        "image_filename": result.data.get("filename", "") if result.data else "",
+                    },
+                )
+            else:
+                # Download failed, let agent try other approaches
+                print(f"[BROWSER] ⚠️ Auto-download failed: {result.message}")
         
         image_download_hint = ""
         if is_images_page:
