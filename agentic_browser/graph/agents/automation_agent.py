@@ -162,16 +162,35 @@ Data collected:
         }
     
     def _at_schedule(self, args: dict) -> dict:
-        """Schedule a one-time command using 'at'."""
+        """Schedule a one-time command using 'at'.
+        
+        Uses stdin to pass the command safely to 'at', avoiding shell=True.
+        """
         time_str = args.get("time", "")
         command = args.get("command", "")
         
         if not time_str or not command:
             return {"success": False, "message": "Both time and command are required"}
         
-        # Use echo to pipe command to at
-        cmd = f'echo "{command}" | at {time_str}'
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
+        # Validate time_str to prevent injection (basic alphanumeric + colon/space)
+        import re
+        if not re.match(r'^[\w\s:+-]+$', time_str):
+            return {"success": False, "message": f"Invalid time format: {time_str}"}
+        
+        # Safe subprocess call: pass command via stdin, not shell
+        try:
+            result = subprocess.run(
+                ["at", time_str],
+                input=command + "\n",
+                text=True,
+                capture_output=True,
+                timeout=10
+            )
+        except FileNotFoundError:
+            return {
+                "success": False,
+                "message": "'at' command not found. Install it with: sudo apt install at"
+            }
         
         if result.returncode != 0:
             return {

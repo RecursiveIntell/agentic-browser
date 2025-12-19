@@ -5,18 +5,37 @@ The browser is only launched when an agent actually needs it.
 """
 
 import atexit
-import weakref
+import logging
+import re
 from typing import Optional, TYPE_CHECKING
 
-from playwright.sync_api import sync_playwright, Playwright, Browser, BrowserContext, Page
+from playwright.sync_api import sync_playwright, Playwright, Browser, BrowserContext, Page, Route
 
 if TYPE_CHECKING:
     from ..config import AgentConfig
     from ..tools import BrowserTools
 
 
+# Get logger for this module
+logger = logging.getLogger(__name__)
+
+
 # Track all browser managers for cleanup on exit
 _active_managers: list["LazyBrowserManager"] = []
+
+
+# Resource patterns to block in fast mode
+FAST_MODE_BLOCKED_PATTERNS = [
+    # Images
+    r".*\.(png|jpg|jpeg|webp|gif|svg|ico|bmp|tiff)(\?.*)?$",
+    # Fonts  
+    r".*\.(woff|woff2|ttf|otf|eot)(\?.*)?$",
+    # Media
+    r".*\.(mp4|webm|mp3|wav|ogg|avi|mov|flv)(\?.*)?$",
+]
+
+# Compile patterns for performance
+_blocked_patterns_compiled = [re.compile(p, re.IGNORECASE) for p in FAST_MODE_BLOCKED_PATTERNS]
 
 
 def _cleanup_all_managers():
@@ -38,6 +57,11 @@ class LazyBrowserManager:
     
     The browser is only launched when get_browser_tools() is first called.
     This avoids opening a browser window for OS-only or code-analysis tasks.
+    
+    Features:
+        - Fast mode: Block images, fonts, and media for faster page loads
+        - Lazy initialization: Browser opens only when needed
+        - Automatic cleanup on exit
     
     Usage:
         manager = LazyBrowserManager(config)
@@ -67,6 +91,32 @@ class LazyBrowserManager:
         # Register for cleanup tracking
         _active_managers.append(self)
     
+    def _should_block_resource(self, url: str) -> bool:
+        """Check if a resource URL should be blocked in fast mode.
+        
+        Args:
+            url: Resource URL to check
+            
+        Returns:
+            True if the resource should be blocked
+        """
+        for pattern in _blocked_patterns_compiled:
+            if pattern.match(url):
+                return True
+        return False
+    
+    def _route_handler(self, route: Route) -> None:
+        """Handle route interception for fast mode.
+        
+        Blocks images, fonts, and media resources.
+        """
+        url = route.request.url
+        if self._should_block_resource(url):
+            logger.debug(f"Fast mode: blocking {url}")
+            route.abort()
+        else:
+            route.continue_()
+    
     def _initialize_browser(self) -> None:
         """Initialize browser, context, and page.
         
@@ -80,7 +130,7 @@ class LazyBrowserManager:
         
         from ..tools import BrowserTools
         
-        print("[DEBUG] LazyBrowserManager: Initializing browser (first use)")
+        logger.debug("LazyBrowserManager: Initializing browser (first use)")
         
         # Start Playwright
         self._playwright = sync_playwright().start()
@@ -96,13 +146,18 @@ class LazyBrowserManager:
             user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
         )
         
+        # Set up fast mode routing if enabled
+        if getattr(self.config, 'browser_fast_mode', False):
+            logger.info("Fast mode enabled: blocking images, fonts, and media")
+            self._context.route("**/*", self._route_handler)
+        
         # Create page
         self._page = self._context.new_page()
         
         # Create browser tools wrapper
         self._browser_tools = BrowserTools(self._page)
         
-        print("[DEBUG] LazyBrowserManager: Browser initialized successfully")
+        logger.debug("LazyBrowserManager: Browser initialized successfully")
     
     def get_browser_tools(self) -> "BrowserTools":
         """Get browser tools, initializing browser if needed.
@@ -139,7 +194,7 @@ class LazyBrowserManager:
             _active_managers.remove(self)
         
         if self._browser_tools:
-            print("[DEBUG] LazyBrowserManager: Closing browser")
+            logger.debug("LazyBrowserManager: Closing browser")
         
         # Close in reverse order
         if self._context:
@@ -180,3 +235,4 @@ class LazyBrowserManager:
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Context manager exit - ensures cleanup."""
         self.close()
+

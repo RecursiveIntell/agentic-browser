@@ -12,7 +12,6 @@ from rich.console import Console
 
 from . import __version__
 from .config import AgentConfig, DEFAULTS
-from .agent import run_agent
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -132,11 +131,12 @@ Examples:
     )
     
     run_parser.add_argument(
-        "--legacy",
+        "--fast",
         action="store_true",
         default=False,
-        help="Use legacy single-agent mode instead of LangGraph",
+        help="Enable fast mode: blocks images, fonts, and media for faster page loads",
     )
+    
     
     run_parser.add_argument(
         "--langsmith",
@@ -227,29 +227,14 @@ def run_command(args: argparse.Namespace) -> int:
         no_persist=args.no_persist,
         enable_tracing=args.enable_tracing,
         gui_ipc=args.gui_ipc,
+        browser_fast_mode=getattr(args, 'fast', False),
     )
     
     # Store explain mode in config for agents to use
     config.explain_mode = getattr(args, 'explain', False)
     
     try:
-        # Check if using legacy single-agent mode
-        if getattr(args, 'legacy', False):
-            # Legacy agent mode
-            result = run_agent(config)
-            
-            # Print final status
-            console.print()
-            if result.success:
-                console.print("[bold green]✓ Goal accomplished![/bold green]")
-                return 0
-            else:
-                console.print(f"[bold red]✗ Goal not accomplished[/bold red]")
-                if result.error:
-                    console.print(f"[red]Error: {result.error}[/red]")
-                return 1
-        
-        # Default: Use new LangGraph multi-agent architecture
+        # Use LangGraph multi-agent architecture
         return run_graph_command(args, config, console)
             
     except KeyboardInterrupt:

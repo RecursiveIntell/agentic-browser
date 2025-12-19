@@ -94,6 +94,7 @@ Settings stored in `~/.agentic_browser/settings.json`.
 | `--auto-approve` | Skip approval prompts for medium-risk actions |
 | `--fresh-profile` | Start with a clean browser profile |
 | `--enable-tracing` | Save Playwright traces for debugging |
+| `--fast` | Block images, fonts, and media for faster page loads |
 
 ### Environment Variables
 ```bash

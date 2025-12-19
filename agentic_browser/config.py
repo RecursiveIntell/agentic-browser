@@ -89,6 +89,9 @@ class AgentConfig:
     # GUI IPC mode for approval dialogs
     gui_ipc: bool = False
     
+    # Browser fast mode - blocks images, fonts, media for faster page loads
+    browser_fast_mode: bool = False
+    
     # Debug mode - enables verbose logging (off by default)
     debug: bool = field(
         default_factory=lambda: os.getenv("AGENTIC_BROWSER_DEBUG", "").lower() in ("1", "true", "yes")
@@ -163,6 +166,7 @@ class AgentConfig:
         no_persist: bool = False,
         enable_tracing: bool = False,
         gui_ipc: bool = False,
+        browser_fast_mode: bool = False,
     ) -> "AgentConfig":
         """Create configuration from CLI arguments."""
         return cls(
@@ -177,6 +181,7 @@ class AgentConfig:
             auto_approve=auto_approve,
             enable_tracing=enable_tracing,
             gui_ipc=gui_ipc,
+            browser_fast_mode=browser_fast_mode,
         )
 
 

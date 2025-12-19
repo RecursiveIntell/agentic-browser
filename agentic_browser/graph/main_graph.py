@@ -225,7 +225,9 @@ class MultiAgentRunner:
             error_msg = str(e).lower()
             # Handle empty response errors from Anthropic/OpenAI
             if "empty" in error_msg or "must contain" in error_msg:
-                print(f"[WARN] Graph stream error (empty response): {e}")
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Graph stream error (empty response): {e}")
                 # Yield a final state with error message
                 yield {
                     "supervisor": {
