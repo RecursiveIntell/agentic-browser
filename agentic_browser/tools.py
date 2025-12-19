@@ -83,6 +83,7 @@ class BrowserTools:
             "back": self.back,
             "forward": self.forward,
             "done": self.done,
+            "download_file": self.download_file,
             "download_image": self.download_image,
         }
         
@@ -116,7 +117,7 @@ class BrowserTools:
             ToolResult
         """
         # Ensure URL has protocol
-        if not url.startswith(("http://", "https://")):
+        if not url.startswith(("http://", "https://", "file://")):
             url = "https://" + url
         
         self.page.goto(url, wait_until="domcontentloaded")
@@ -551,6 +552,44 @@ class BrowserTools:
             message="Task completed",
             data={"summary_style": summary_style},
         )
+
+    def download_file(self, url: str, save_path: str) -> ToolResult:
+        """Download a file to a local path.
+
+        Args:
+            url: URL to download
+            save_path: Local path to save the file
+
+        Returns:
+            ToolResult with download path
+        """
+        import httpx
+
+        target = Path(save_path).expanduser()
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            with httpx.stream("GET", url, follow_redirects=True, timeout=30.0) as response:
+                response.raise_for_status()
+                with open(target, "wb") as handle:
+                    for chunk in response.iter_bytes():
+                        handle.write(chunk)
+
+            return ToolResult(
+                success=True,
+                message=f"Downloaded file to {target}",
+                data={"url": url, "path": str(target)},
+            )
+        except httpx.HTTPError as e:
+            return ToolResult(
+                success=False,
+                message=f"Failed to download {url}: {e}",
+            )
+        except OSError as e:
+            return ToolResult(
+                success=False,
+                message=f"Failed to write file {target}: {e}",
+            )
     
     def download_image(
         self,

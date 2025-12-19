@@ -320,6 +320,23 @@ class DownloadFileRequest(BaseModel):
         return str(Path(v).expanduser())
 
 
+class DownloadImageRequest(BaseModel):
+    """Request to download an image from the browser."""
+
+    selector: Optional[str] = Field(
+        default=None,
+        description="Optional selector to find an image element",
+    )
+    url: Optional[str] = Field(
+        default=None,
+        description="Optional direct image URL",
+    )
+    filename: Optional[str] = Field(
+        default=None,
+        description="Optional filename for the downloaded image",
+    )
+
+
 # =============================================================================
 # Memory Tool Schemas (Phase 3 - placeholder)
 # =============================================================================
@@ -367,6 +384,7 @@ BrowserRequest = Union[
     ExtractVisibleTextRequest,
     ScreenshotRequest,
     DownloadFileRequest,
+    DownloadImageRequest,
 ]
 
 # Type alias for all memory requests
@@ -453,6 +471,7 @@ ACTION_SCHEMAS: dict[str, type[BaseModel]] = {
     "extract_visible_text": ExtractVisibleTextRequest,
     "screenshot": ScreenshotRequest,
     "download_file": DownloadFileRequest,
+    "download_image": DownloadImageRequest,
     # Memory actions (Phase 3)
     "memory_get_site": MemoryGetSiteRequest,
     "memory_save_site": MemorySaveSiteRequest,

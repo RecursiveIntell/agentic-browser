@@ -21,6 +21,7 @@ class TestToolRouterRouting:
             "goto", "click", "type", "press", "scroll",
             "wait_for", "extract", "extract_visible_text",
             "screenshot", "back", "forward", "done",
+            "download_file", "download_image",
         ]
         
         for action in browser_actions:
@@ -31,11 +32,22 @@ class TestToolRouterRouting:
         """Test OS actions route to OS domain."""
         os_actions = [
             "os_exec", "os_list_dir", "os_read_file", "os_write_file",
+            "os_move_file", "os_copy_file", "os_delete_file",
         ]
         
         for action in os_actions:
             domain = router.route_action(action)
             assert domain == "os", f"Failed for: {action}"
+
+    def test_route_memory_actions(self, router):
+        """Test memory actions route to memory domain."""
+        memory_actions = [
+            "memory_get_site", "memory_save_site", "memory_get_directory",
+        ]
+
+        for action in memory_actions:
+            domain = router.route_action(action)
+            assert domain == "memory", f"Failed for: {action}"
     
     def test_unknown_action_raises(self, router):
         """Test that unknown actions raise ValueError."""
@@ -105,6 +117,7 @@ class TestToolRouterAvailability:
         
         assert actions["browser"] == []
         assert actions["os"] == []
+        assert actions["memory"] == []
     
     def test_get_available_actions_browser_only(self):
         """Test browser actions when only browser configured."""
@@ -114,6 +127,7 @@ class TestToolRouterAvailability:
         assert "click" in actions["browser"]
         assert "goto" in actions["browser"]
         assert actions["os"] == []
+        assert actions["memory"] == []
     
     def test_get_available_actions_os_only(self):
         """Test OS actions when only OS configured."""
@@ -123,6 +137,16 @@ class TestToolRouterAvailability:
         assert actions["browser"] == []
         assert "os_exec" in actions["os"]
         assert "os_list_dir" in actions["os"]
+        assert actions["memory"] == []
+
+    def test_get_available_actions_memory_only(self):
+        """Test memory actions when only memory configured."""
+        router = ToolRouter(memory_tools=MagicMock())
+        actions = router.get_available_actions()
+
+        assert actions["browser"] == []
+        assert actions["os"] == []
+        assert "memory_get_site" in actions["memory"]
     
     def test_get_available_actions_both(self):
         """Test all actions when both configured."""
@@ -134,6 +158,7 @@ class TestToolRouterAvailability:
         
         assert len(actions["browser"]) > 0
         assert len(actions["os"]) > 0
+        assert len(actions["memory"]) == 0
 
 
 class TestToolRouterSetters:

@@ -23,6 +23,7 @@ class ToolRouter:
         self,
         browser_tools: Optional[Any] = None,
         os_tools: Optional[Any] = None,
+        memory_tools: Optional[Any] = None,
     ):
         """Initialize the tool router.
         
@@ -32,6 +33,7 @@ class ToolRouter:
         """
         self.browser_tools = browser_tools
         self.os_tools = os_tools
+        self.memory_tools = memory_tools
     
     def set_browser_tools(self, browser_tools: Any) -> None:
         """Set the browser tools instance.
@@ -48,6 +50,14 @@ class ToolRouter:
             os_tools: OSTools instance
         """
         self.os_tools = os_tools
+
+    def set_memory_tools(self, memory_tools: Any) -> None:
+        """Set the memory tools instance.
+
+        Args:
+            memory_tools: MemoryTools instance
+        """
+        self.memory_tools = memory_tools
     
     def route_action(self, action: str) -> str:
         """Determine which domain an action belongs to.
@@ -65,6 +75,8 @@ class ToolRouter:
             return "browser"
         elif DomainRouter.is_os_action(action):
             return "os"
+        elif DomainRouter.is_memory_action(action):
+            return "memory"
         else:
             raise ValueError(f"Unknown action: {action}")
     
@@ -101,7 +113,7 @@ class ToolRouter:
             
             return self.browser_tools.execute(action, args)
         
-        else:  # domain == "os"
+        elif domain == "os":
             if self.os_tools is None:
                 from dataclasses import dataclass
                 
@@ -117,6 +129,23 @@ class ToolRouter:
                 return ErrorResult()
             
             return self.os_tools.execute(action, args)
+
+        else:  # domain == "memory"
+            if self.memory_tools is None:
+                from dataclasses import dataclass
+
+                @dataclass
+                class ErrorResult:
+                    success: bool = False
+                    message: str = "Memory tools not configured"
+                    data: Any = None
+
+                    def to_dict(self):
+                        return {"success": self.success, "message": self.message}
+
+                return ErrorResult()
+
+            return self.memory_tools.execute(action, args)
     
     def get_available_actions(self) -> dict[str, list[str]]:
         """Get lists of available actions by domain.
@@ -132,16 +161,25 @@ class ToolRouter:
                 "goto", "click", "type", "press", "scroll",
                 "wait_for", "extract", "extract_visible_text",
                 "screenshot", "back", "forward", "done",
+                "download_file", "download_image",
             ]
         
         if self.os_tools is not None:
             os_actions = [
                 "os_exec", "os_list_dir", "os_read_file", "os_write_file",
+                "os_move_file", "os_copy_file", "os_delete_file",
+            ]
+
+        memory_actions = []
+        if self.memory_tools is not None:
+            memory_actions = [
+                "memory_get_site", "memory_save_site", "memory_get_directory",
             ]
         
         return {
             "browser": browser_actions,
             "os": os_actions,
+            "memory": memory_actions,
         }
     
     def has_browser_tools(self) -> bool:
@@ -151,3 +189,7 @@ class ToolRouter:
     def has_os_tools(self) -> bool:
         """Check if OS tools are configured."""
         return self.os_tools is not None
+
+    def has_memory_tools(self) -> bool:
+        """Check if memory tools are configured."""
+        return self.memory_tools is not None

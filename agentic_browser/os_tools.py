@@ -19,6 +19,9 @@ from .tool_schemas import (
     ListDirRequest,
     ReadFileRequest,
     WriteFileRequest,
+    MoveFileRequest,
+    CopyFileRequest,
+    DeleteFileRequest,
     validate_action_args,
 )
 
@@ -115,6 +118,9 @@ class OSTools:
             "os_list_dir": self._list_dir,
             "os_read_file": self._read_file,
             "os_write_file": self._write_file,
+            "os_move_file": self._move_file,
+            "os_copy_file": self._copy_file,
+            "os_delete_file": self._delete_file,
         }
         
         handler = action_map.get(action)
@@ -134,7 +140,15 @@ class OSTools:
     
     def execute_typed(
         self,
-        request: Union[RunCommandRequest, ListDirRequest, ReadFileRequest, WriteFileRequest],
+        request: Union[
+            RunCommandRequest,
+            ListDirRequest,
+            ReadFileRequest,
+            WriteFileRequest,
+            MoveFileRequest,
+            CopyFileRequest,
+            DeleteFileRequest,
+        ],
     ) -> ToolResult:
         """Execute an OS action with typed request (PREFERRED).
         
@@ -159,6 +173,18 @@ class OSTools:
                 "content": request.content,
                 "mode": request.mode,
             })
+        elif isinstance(request, MoveFileRequest):
+            return self._move_file({
+                "source": request.source,
+                "destination": request.destination,
+            })
+        elif isinstance(request, CopyFileRequest):
+            return self._copy_file({
+                "source": request.source,
+                "destination": request.destination,
+            })
+        elif isinstance(request, DeleteFileRequest):
+            return self._delete_file({"path": request.path})
         else:
             return ToolResult(
                 success=False,
@@ -535,24 +561,9 @@ class OSTools:
             )
         
         path = Path(path_str).expanduser().resolve()
-        
-        # Safety check: restrict writes outside home unless allowed
-        if not self.allow_outside_home:
-            if not str(path).startswith(str(self.home_dir)):
-                return ToolResult(
-                    success=False,
-                    message=f"Write blocked: {path} is outside home directory. "
-                            f"Writes are restricted to {self.home_dir}",
-                )
-        
-        # Check for high-risk paths
-        path_str_lower = str(path).lower()
-        for risk_path in self.HIGH_RISK_PATHS:
-            if path_str_lower.startswith(risk_path):
-                return ToolResult(
-                    success=False,
-                    message=f"Write blocked: {path} is in protected system path {risk_path}",
-                )
+        blocked_reason = self._validate_write_path(path)
+        if blocked_reason:
+            return ToolResult(success=False, message=blocked_reason)
         
         try:
             # Ensure parent directory exists
@@ -583,6 +594,180 @@ class OSTools:
                 success=False,
                 message=f"Error writing file: {e}",
             )
+
+    def _move_file(self, args: dict[str, Any]) -> ToolResult:
+        """Move or rename a file or directory.
+
+        Args:
+            args: {
+                "source": "/path/to/source",
+                "destination": "/path/to/destination"
+            }
+
+        Returns:
+            ToolResult indicating success/failure
+        """
+        source = args.get("source")
+        destination = args.get("destination")
+        if not source or not destination:
+            return ToolResult(
+                success=False,
+                message="Missing required arguments: source and destination",
+            )
+
+        source_path = Path(source).expanduser().resolve()
+        dest_path = Path(destination).expanduser().resolve()
+
+        blocked_reason = self._validate_write_path(source_path)
+        if blocked_reason:
+            return ToolResult(success=False, message=blocked_reason)
+
+        blocked_reason = self._validate_write_path(dest_path)
+        if blocked_reason:
+            return ToolResult(success=False, message=blocked_reason)
+
+        if not source_path.exists():
+            return ToolResult(
+                success=False,
+                message=f"Source does not exist: {source_path}",
+            )
+
+        try:
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            import shutil
+
+            result_path = shutil.move(str(source_path), str(dest_path))
+            return ToolResult(
+                success=True,
+                message=f"Moved {source_path} to {result_path}",
+                data={"source": str(source_path), "destination": str(result_path)},
+            )
+        except OSError as e:
+            return ToolResult(
+                success=False,
+                message=f"Error moving file: {e}",
+            )
+
+    def _copy_file(self, args: dict[str, Any]) -> ToolResult:
+        """Copy a file or directory.
+
+        Args:
+            args: {
+                "source": "/path/to/source",
+                "destination": "/path/to/destination"
+            }
+
+        Returns:
+            ToolResult indicating success/failure
+        """
+        source = args.get("source")
+        destination = args.get("destination")
+        if not source or not destination:
+            return ToolResult(
+                success=False,
+                message="Missing required arguments: source and destination",
+            )
+
+        source_path = Path(source).expanduser().resolve()
+        dest_path = Path(destination).expanduser().resolve()
+
+        blocked_reason = self._validate_write_path(source_path)
+        if blocked_reason:
+            return ToolResult(success=False, message=blocked_reason)
+
+        blocked_reason = self._validate_write_path(dest_path)
+        if blocked_reason:
+            return ToolResult(success=False, message=blocked_reason)
+
+        if not source_path.exists():
+            return ToolResult(
+                success=False,
+                message=f"Source does not exist: {source_path}",
+            )
+
+        try:
+            import shutil
+
+            if source_path.is_dir():
+                shutil.copytree(str(source_path), str(dest_path), dirs_exist_ok=True)
+            else:
+                dest_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(str(source_path), str(dest_path))
+
+            return ToolResult(
+                success=True,
+                message=f"Copied {source_path} to {dest_path}",
+                data={"source": str(source_path), "destination": str(dest_path)},
+            )
+        except OSError as e:
+            return ToolResult(
+                success=False,
+                message=f"Error copying file: {e}",
+            )
+
+    def _delete_file(self, args: dict[str, Any]) -> ToolResult:
+        """Delete a file.
+
+        Args:
+            args: {
+                "path": "/path/to/file"
+            }
+
+        Returns:
+            ToolResult indicating success/failure
+        """
+        path_str = args.get("path")
+        if not path_str:
+            return ToolResult(
+                success=False,
+                message="Missing required argument: path",
+            )
+
+        path = Path(path_str).expanduser().resolve()
+        blocked_reason = self._validate_write_path(path)
+        if blocked_reason:
+            return ToolResult(success=False, message=blocked_reason)
+
+        if not path.exists():
+            return ToolResult(
+                success=False,
+                message=f"Path does not exist: {path}",
+            )
+
+        if path.is_dir():
+            return ToolResult(
+                success=False,
+                message=f"Refusing to delete directory: {path}",
+            )
+
+        try:
+            path.unlink()
+            return ToolResult(
+                success=True,
+                message=f"Deleted file {path}",
+                data={"path": str(path)},
+            )
+        except OSError as e:
+            return ToolResult(
+                success=False,
+                message=f"Error deleting file: {e}",
+            )
+
+    def _validate_write_path(self, path: Path) -> Optional[str]:
+        """Validate a path for write/delete/move/copy operations."""
+        if not self.allow_outside_home:
+            if not str(path).startswith(str(self.home_dir)):
+                return (
+                    f"Write blocked: {path} is outside home directory. "
+                    f"Writes are restricted to {self.home_dir}"
+                )
+
+        path_str_lower = str(path).lower()
+        for risk_path in self.HIGH_RISK_PATHS:
+            if path_str_lower.startswith(risk_path):
+                return f"Write blocked: {path} is in protected system path {risk_path}"
+
+        return None
     
     def _truncate_output(self, text: str) -> str:
         """Truncate output to max chars."""

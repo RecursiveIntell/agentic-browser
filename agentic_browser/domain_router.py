@@ -314,6 +314,7 @@ Respond with ONLY a JSON object:
             "goto", "click", "type", "press", "scroll", 
             "wait_for", "extract", "extract_visible_text",
             "screenshot", "back", "forward", "done",
+            "download_file", "download_image",
         }
         return action in browser_actions
     
@@ -327,5 +328,30 @@ Respond with ONLY a JSON object:
         Returns:
             True if OS action
         """
-        os_actions = {"os_exec", "os_list_dir", "os_read_file", "os_write_file"}
+        os_actions = {
+            "os_exec",
+            "os_list_dir",
+            "os_read_file",
+            "os_write_file",
+            "os_move_file",
+            "os_copy_file",
+            "os_delete_file",
+        }
         return action in os_actions
+
+    @staticmethod
+    def is_memory_action(action: str) -> bool:
+        """Check if an action is a memory action.
+
+        Args:
+            action: Action name
+
+        Returns:
+            True if memory action
+        """
+        memory_actions = {
+            "memory_get_site",
+            "memory_save_site",
+            "memory_get_directory",
+        }
+        return action in memory_actions

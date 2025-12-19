@@ -136,6 +136,7 @@ class TestDomainRouterActionClassification:
             "goto", "click", "type", "press", "scroll",
             "wait_for", "extract", "extract_visible_text",
             "screenshot", "back", "forward", "done",
+            "download_file", "download_image",
         ]
         
         for action in browser_actions:
@@ -146,13 +147,28 @@ class TestDomainRouterActionClassification:
         """Test OS action detection."""
         os_actions = [
             "os_exec", "os_list_dir", "os_read_file", "os_write_file",
+            "os_move_file", "os_copy_file", "os_delete_file",
         ]
         
         for action in os_actions:
             assert DomainRouter.is_os_action(action), f"Failed for: {action}"
             assert not DomainRouter.is_browser_action(action), f"Should not be browser: {action}"
+
+    def test_memory_actions(self):
+        """Test memory action detection."""
+        memory_actions = [
+            "memory_get_site",
+            "memory_save_site",
+            "memory_get_directory",
+        ]
+
+        for action in memory_actions:
+            assert DomainRouter.is_memory_action(action), f"Failed for: {action}"
+            assert not DomainRouter.is_browser_action(action), f"Should not be browser: {action}"
+            assert not DomainRouter.is_os_action(action), f"Should not be OS: {action}"
     
     def test_unknown_action(self):
         """Test that unknown actions are neither browser nor OS."""
         assert not DomainRouter.is_browser_action("unknown_action")
         assert not DomainRouter.is_os_action("unknown_action")
+        assert not DomainRouter.is_memory_action("unknown_action")
