@@ -88,7 +88,7 @@ When completing, synthesize ALL gathered data into a useful report:
         self.domain_router = DomainRouter(config)
     
     def safe_invoke(self, messages: list) -> AIMessage:
-        """Invoke LLM with fallback handling for 404 errors.
+        """Invoke LLM with fallback handling for 404 errors and empty responses.
         
         If the configured model is not found (404), this will:
         1. Log the error
@@ -97,9 +97,22 @@ When completing, synthesize ALL gathered data into a useful report:
         4. Retry the invocation
         """
         try:
-            return self.llm.invoke(messages)
+            response = self.llm.invoke(messages)
+            
+            # Handle empty responses
+            if response is None or (hasattr(response, 'content') and not response.content):
+                print("[WARN] Supervisor LLM returned empty response, providing fallback")
+                return AIMessage(content='{"route_to": "done", "rationale": "Model returned empty response", "final_answer": "Unable to complete - model returned empty response"}')
+            
+            return response
+            
         except Exception as e:
             error_msg = str(e).lower()
+            
+            # Handle empty response errors from provider
+            if "empty" in error_msg or "must contain" in error_msg:
+                print(f"[WARN] Empty response error: {e}")
+                return AIMessage(content='{"route_to": "done", "rationale": "Model error", "final_answer": "Model returned empty response - please try again"}')
             
             # Check for 404 / model not found errors
             if "404" in error_msg or "not_found" in error_msg or "model" in error_msg and "not found" in error_msg:
