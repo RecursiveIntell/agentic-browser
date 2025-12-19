@@ -50,6 +50,9 @@ class AgentState(TypedDict):
     
     # Session ID for tool registry lookup (serializable string)
     session_id: str
+    
+    # Research agent: track clicked links to avoid re-clicking
+    clicked_selectors: Annotated[list[str], operator.add]
 
 
 def create_initial_state(
@@ -85,5 +88,6 @@ def create_initial_state(
         pending_approval=None,
         approved_actions=[],
         session_id=session_id,
+        clicked_selectors=[],
     )
 

@@ -208,7 +208,8 @@ Action: {"action": "done", "args": {"summary": "## Research Report\\n\\n[Your de
             progress_msg = "✅ You have enough sources. You may call done with a comprehensive summary."
         
         # Track clicked link selectors to avoid re-clicking
-        clicked_selectors = state.get('_clicked_selectors', [])
+        clicked_selectors = state.get('clicked_selectors', [])
+        print(f"[RESEARCH DEBUG] clicked_selectors in state: {clicked_selectors}")
         
         # Format clicked links warning
         if clicked_selectors:
@@ -247,6 +248,9 @@ Data collected:
         try:
             response = self.safe_invoke(messages)
             action_data = self._parse_action(response.content)
+            
+            # Debug: show what action was chosen
+            print(f"[RESEARCH] Action: {action_data.get('action')}, Args: {action_data.get('args', {})}")
             
             if action_data.get("action") == "done":
                 # HARD BLOCK: Reject 'done' if insufficient research content
@@ -379,11 +383,13 @@ Data collected:
             tool_msg = HumanMessage(content=f"Tool output: {tool_content}")
             
             # Track clicked selectors to avoid re-clicking
-            clicked_selectors = list(state.get('_clicked_selectors', []))
+            # Note: clicked_selectors uses operator.add so we return a list to append
+            clicked_to_add = []
             if action_data.get("action") == "click" and result.success:
                 selector = action_data.get("args", {}).get("selector", "")
-                if selector and selector not in clicked_selectors:
-                    clicked_selectors.append(selector)
+                if selector:
+                    print(f"[RESEARCH DEBUG] Click successful, adding selector: {selector}")
+                    clicked_to_add = [selector]
             
             new_state = self._update_state(
                 state,
@@ -393,8 +399,9 @@ Data collected:
                 error=result.message if not result.success else None,
             )
             
-            # Persist clicked selectors 
-            new_state['_clicked_selectors'] = clicked_selectors
+            # Add clicked selectors (uses operator.add to accumulate)
+            if clicked_to_add:
+                new_state['clicked_selectors'] = clicked_to_add
             
             return new_state
             
