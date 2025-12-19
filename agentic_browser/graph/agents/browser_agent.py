@@ -154,6 +154,47 @@ Your task: {state['goal']}
             logger.debug(f"Browser agent action: {action} with args: {args}")
             print(f"[BROWSER] Action: {action}, Args: {args}")  # Visible debug output
             
+            # === LOOP DETECTION ===
+            # Check if we're repeating the same action or stuck in a goto loop
+            action_key = f"{action}:{json.dumps(args, sort_keys=True)}"
+            recent_actions = state.get("_recent_actions", [])
+            
+            # Count how many times this exact action was done recently
+            repeat_count = sum(1 for a in recent_actions[-5:] if a == action_key)
+            
+            # Detect: repeating goto to URL we're already on
+            if action == "goto" and args.get("url"):
+                goto_url = args.get("url", "").split("?")[0].rstrip("/")
+                current_base = current_url.split("?")[0].rstrip("/")
+                if goto_url == current_base or repeat_count >= 1:
+                    logger.warning(f"Loop detected: already on {current_url}, forcing download_image")
+                    print(f"[BROWSER] ⚠️ Loop detected - already on this URL or repeated action!")
+                    
+                    # If it's an images page and goal involves downloading, force download_image
+                    goal_lower = state['goal'].lower()
+                    if is_images_page and any(w in goal_lower for w in ['download', 'save', 'get image', 'get picture', 'find picture', 'find image']):
+                        print(f"[BROWSER] 🔄 Auto-executing download_image to break loop")
+                        action_data = {"action": "download_image", "args": {}}
+                        action = "download_image"
+                        args = {}
+            
+            # If repeated 3+ times, force a scroll or download
+            if repeat_count >= 2:
+                print(f"[BROWSER] ⚠️ Action repeated {repeat_count + 1}x - breaking loop")
+                if is_images_page:
+                    action_data = {"action": "download_image", "args": {}}
+                    action = "download_image"
+                    args = {}
+                else:
+                    action_data = {"action": "scroll", "args": {"amount": 500}}
+                    action = "scroll"
+                    args = {"amount": 500}
+            
+            # Track this action for loop detection (store in state)
+            recent_actions.append(action_key)
+            if len(recent_actions) > 10:
+                recent_actions = recent_actions[-10:]
+            
             if action_data.get("action") == "done":
                 # Store findings but DON'T mark task_complete - let supervisor decide
                 summary = action_data.get("args", {}).get("summary", "Task completed")
@@ -202,13 +243,19 @@ Your task: {state['goal']}
             
             tool_msg = HumanMessage(content=f"Tool output: {tool_content}")
             
-            return self._update_state(
+            # Build updated state with loop tracking
+            new_state = self._update_state(
                 state,
                 messages=[AIMessage(content=response.content), tool_msg],
                 visited_url=visited,
                 extracted_data=extracted,
                 error=result.message if not result.success else None,
             )
+            
+            # Persist recent actions for loop detection
+            new_state["_recent_actions"] = recent_actions
+            
+            return new_state
             
         except Exception as e:
             return self._update_state(

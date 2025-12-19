@@ -28,6 +28,7 @@ class ResearchAgentNode(BaseAgent):
 Available actions:
 - goto: { "url": "https://..." } - Navigate to URL
 - click: { "selector": "text=Link Text" } - Click links (USE text= prefix!)
+- back: { } - Go back to previous page (e.g., to return to search results)
 - extract_visible_text: { "max_chars": 8000 } - Get page text
 - done: { "summary": "your research findings" } - Complete with report
 
@@ -38,17 +39,26 @@ STEP 1: SEARCH
 
 STEP 2: EXTRACT SEARCH RESULTS
 - ALWAYS extract the search page: {"action": "extract_visible_text", "args": {"max_chars": 8000}}
-- Look for real URLs in the extracted text (e.g., forbes.com, wikipedia.org, etc.)
+- Look for clickable link text in the results
 
-STEP 3: VISIT RESULTS IN ORDER
-- Visit the FIRST result: {"action": "goto", "args": {"url": "https://first-result.com/..."}}
-- Extract its content
-- Visit the SECOND result
-- Extract its content
-- Continue until you have 5+ sources
+STEP 3: CLICK RESULTS (PREFERRED) or GOTO
+- PREFERRED: Click links directly from search results:
+  {"action": "click", "args": {"selector": "text=Article Title Here"}}
+- After visiting a page, use BACK to return to search results:
+  {"action": "back", "args": {}}
+- Then click the next result
 
-STEP 4: SYNTHESIZE
-- Only call "done" after visiting 5+ different websites
+NOTE: Using click+back is MORE RELIABLE than direct goto because:
+- Search result URLs can be tracking links that redirect
+- Direct URLs may be outdated or 404
+- Clicking the actual link follows the correct redirect
+
+STEP 4: VISIT MULTIPLE SOURCES
+- Click result 1 → Extract → Back → Click result 2 → Extract → etc.
+- Continue until you have 3-5 sources
+
+STEP 5: SYNTHESIZE
+- Only call "done" after visiting 3+ different websites
 - Include SPECIFIC facts and examples from each source
 - Name your sources in the summary
 
@@ -58,7 +68,7 @@ STEP 4: SYNTHESIZE
    - CORRECT: {"action": "click", "args": {"selector": "text=Read More"}}
    - WRONG: {"action": "click", "args": {"selector": "r/artificial"}}
 
-2. NO URL GUESSING: Only visit URLs you actually see in search results
+2. USE BACK: After extracting from a page, go BACK to search results to click the next link
 
 3. SYSTEMATIC ORDERING: Visit results 1, 2, 3, 4, 5 in order - don't skip around
 
@@ -69,13 +79,13 @@ STEP 4: SYNTHESIZE
 6. FOLLOW USER REQUIREMENTS: If user asks for "10 examples", gather 10+ examples
 
 === ERROR RECOVERY ===
-- If a site fails (404, CAPTCHA, paywall), skip it and try the next result
+- If a site fails (404, CAPTCHA, paywall), go BACK and try the next result
 - After 3 failures in a row, synthesize what you have and call "done"
 - A partial report from 3 good sources beats nothing
 
 Respond with JSON:
 {
-  "action": "goto|click|extract_visible_text|done",
+  "action": "goto|click|back|extract_visible_text|done",
   "args": { ... },
   "rationale": "brief reason"
 }"""
