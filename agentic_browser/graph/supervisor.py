@@ -146,10 +146,15 @@ When completing, synthesize ALL gathered data into a useful report:
                     self.llm = create_llm_client(self.config, max_tokens=500)
                     
                     # Retry
-                    return self.llm.invoke(messages)
+                    try:
+                        return self.llm.invoke(messages)
+                    except Exception as retry_err:
+                        print(f"[WARN] Retry also failed: {retry_err}")
+                        return AIMessage(content='{"route_to": "done", "final_answer": "Model error during retry - please try again"}')
             
-            # Re-raise if not handled or retry failed
-            raise e
+            # Catch-all: return a fallback response instead of crashing
+            print(f"[WARN] Unhandled LLM error, returning fallback: {e}")
+            return AIMessage(content='{"route_to": "done", "rationale": "LLM error", "final_answer": "An error occurred with the model. Please try again."}')
     
     def route(self, state: AgentState) -> AgentState:
         """Decide which agent should handle the current state.

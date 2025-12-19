@@ -188,10 +188,15 @@ class BaseAgent(ABC):
                     self.llm = create_llm_client(self.config, max_tokens=1000)
                     
                     # Retry
-                    return self.llm.invoke(messages)
+                    try:
+                        return self.llm.invoke(messages)
+                    except Exception as retry_err:
+                        print(f"[WARN] Retry also failed: {retry_err}")
+                        return AIMessage(content='{"action": "done", "args": {"summary": "Model error during retry"}}')
             
-            # Re-raise if not handled or retry failed
-            raise e
+            # Catch-all: return a fallback response instead of crashing
+            print(f"[WARN] Unhandled LLM error, returning fallback: {e}")
+            return AIMessage(content='{"action": "done", "args": {"summary": "An error occurred with the model"}}')
 
     @abstractmethod
     def execute(self, state: AgentState) -> AgentState:
