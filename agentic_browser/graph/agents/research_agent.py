@@ -319,6 +319,14 @@ Data collected:
             current_error = state.get('error', '') or ''
             if 'Could not click' in current_error:
                 recent_fails += 1
+            
+            # Check if we just scrolled - if so, force extract to update context
+            just_scrolled = state.get('_just_scrolled', False)
+            if just_scrolled and action_data.get("action") == "click":
+                # LLM is trying to click but hasn't seen new content after scroll
+                print(f"[RESEARCH] 📋 Just scrolled - forcing extract to show new visible content before clicking")
+                action_data = {"action": "extract_visible_text", "args": {"max_chars": 4000}}
+                # Will clear the flag after execution below
                 
             if recent_fails >= 1 and action_data.get("action") == "click":
                 print(f"[RESEARCH] ⚠️ {recent_fails} recent click failure(s) - forcing scroll to find real links")
@@ -491,6 +499,13 @@ Data collected:
             
             # Set the updated clicked selectors list
             new_state['clicked_selectors'] = existing_clicked
+            
+            # Track scroll state - set flag when scroll, clear when extract
+            if action_data.get("action") == "scroll":
+                new_state['_just_scrolled'] = True
+                print("[RESEARCH] 📜 Scrolled - will force extract on next step to update context")
+            elif action_data.get("action") == "extract_visible_text":
+                new_state['_just_scrolled'] = False
             
             return new_state
             
