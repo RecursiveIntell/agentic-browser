@@ -207,13 +207,27 @@ Action: {"action": "done", "args": {"summary": "## Research Report\\n\\n[Your de
         else:
             progress_msg = "✅ You have enough sources. You may call done with a comprehensive summary."
         
+        # Track clicked link selectors to avoid re-clicking
+        clicked_selectors = state.get('_clicked_selectors', [])
+        
+        # Format clicked links warning
+        if clicked_selectors:
+            clicked_warning = f"""
+⛔ ALREADY CLICKED - DO NOT CLICK THESE AGAIN:
+{chr(10).join(f'  - {sel}' for sel in clicked_selectors[-10:])}
+
+You MUST click a DIFFERENT link from the search results!
+"""
+        else:
+            clicked_warning = ""
+        
         task_context = f"""
 RESEARCH TASK: {state['goal']}
 
 === PROGRESS ===
 Sources extracted: {sources_extracted}/{MIN_SOURCES_REQUIRED}
 {progress_msg}
-
+{clicked_warning}
 Visited URLs: {chr(10).join(state['visited_urls'][-5:]) or '(none)'}
 
 Current page: {page_state.get('page_title', '') or page_state.get('title', 'Unknown')}
@@ -364,13 +378,25 @@ Data collected:
                 
             tool_msg = HumanMessage(content=f"Tool output: {tool_content}")
             
-            return self._update_state(
+            # Track clicked selectors to avoid re-clicking
+            clicked_selectors = list(state.get('_clicked_selectors', []))
+            if action_data.get("action") == "click" and result.success:
+                selector = action_data.get("args", {}).get("selector", "")
+                if selector and selector not in clicked_selectors:
+                    clicked_selectors.append(selector)
+            
+            new_state = self._update_state(
                 state,
                 messages=[AIMessage(content=response.content), tool_msg],
                 visited_url=visited,
                 extracted_data=extracted,
                 error=result.message if not result.success else None,
             )
+            
+            # Persist clicked selectors 
+            new_state['_clicked_selectors'] = clicked_selectors
+            
+            return new_state
             
         except Exception as e:
             return self._update_state(
