@@ -83,6 +83,7 @@ class BrowserTools:
             "back": self.back,
             "forward": self.forward,
             "done": self.done,
+            "download_image": self.download_image,
         }
         
         method = method_map.get(action)
@@ -550,6 +551,193 @@ class BrowserTools:
             message="Task completed",
             data={"summary_style": summary_style},
         )
+    
+    def download_image(
+        self,
+        selector: Optional[str] = None,
+        url: Optional[str] = None,
+        filename: Optional[str] = None,
+    ) -> ToolResult:
+        """Download an image from the page.
+        
+        Can download by:
+        1. Direct URL (if provided)
+        2. Image element selector (if provided)
+        3. Automatically find the largest/most prominent image on page
+        
+        Args:
+            selector: CSS selector for image element (optional)
+            url: Direct URL to image (optional)
+            filename: Filename to save as (optional, auto-generated if not provided)
+            
+        Returns:
+            ToolResult with download path
+        """
+        import httpx
+        import hashlib
+        from pathlib import Path
+        from urllib.parse import urlparse, urljoin
+        
+        # Determine downloads directory
+        downloads_dir = Path.home() / "Downloads"
+        downloads_dir.mkdir(exist_ok=True)
+        
+        image_url = url
+        
+        # If no URL provided, find image on page
+        if not image_url:
+            if selector:
+                # Get image URL from selector
+                selector = format_selector(selector)
+                try:
+                    element = self.page.query_selector(selector)
+                    if element:
+                        image_url = element.get_attribute("src")
+                        if not image_url:
+                            # Try srcset
+                            srcset = element.get_attribute("srcset")
+                            if srcset:
+                                # Get highest resolution from srcset
+                                parts = srcset.split(",")
+                                image_url = parts[-1].strip().split()[0]
+                except Exception as e:
+                    return ToolResult(
+                        success=False,
+                        message=f"Could not find image with selector: {selector}. Error: {e}",
+                    )
+            else:
+                # Auto-find the largest/most prominent image
+                try:
+                    image_data = self.page.evaluate("""
+                        () => {
+                            const images = Array.from(document.querySelectorAll('img[src]'));
+                            
+                            // Filter and sort by size (largest first)
+                            const sorted = images
+                                .filter(img => {
+                                    const src = img.src || '';
+                                    // Skip tiny images, icons, tracking pixels
+                                    return img.naturalWidth > 100 && 
+                                           img.naturalHeight > 100 &&
+                                           !src.includes('logo') &&
+                                           !src.includes('icon') &&
+                                           !src.includes('avatar') &&
+                                           !src.includes('tracking');
+                                })
+                                .sort((a, b) => (b.naturalWidth * b.naturalHeight) - (a.naturalWidth * a.naturalHeight));
+                            
+                            if (sorted.length > 0) {
+                                const best = sorted[0];
+                                return {
+                                    src: best.src,
+                                    alt: best.alt || '',
+                                    width: best.naturalWidth,
+                                    height: best.naturalHeight
+                                };
+                            }
+                            return null;
+                        }
+                    """)
+                    
+                    if image_data:
+                        image_url = image_data.get("src")
+                    else:
+                        return ToolResult(
+                            success=False,
+                            message="No suitable images found on page. Try navigating to an image detail page first.",
+                        )
+                except Exception as e:
+                    return ToolResult(
+                        success=False,
+                        message=f"Error finding images: {e}",
+                    )
+        
+        if not image_url:
+            return ToolResult(
+                success=False,
+                message="No image URL found or provided",
+            )
+        
+        # Make URL absolute if needed
+        if image_url.startswith("//"):
+            image_url = "https:" + image_url
+        elif image_url.startswith("/"):
+            image_url = urljoin(self.page.url, image_url)
+        
+        # Generate filename if not provided
+        if not filename:
+            parsed = urlparse(image_url)
+            path_parts = parsed.path.split("/")
+            base_name = path_parts[-1] if path_parts else "image"
+            
+            # If no extension, add one
+            if "." not in base_name:
+                base_name += ".jpg"
+            
+            # Clean up filename
+            base_name = "".join(c for c in base_name if c.isalnum() or c in "._-")[:50]
+            if not base_name:
+                hash_str = hashlib.md5(image_url.encode()).hexdigest()[:8]
+                base_name = f"image_{hash_str}.jpg"
+            
+            filename = base_name
+        
+        # Ensure unique filename
+        save_path = downloads_dir / filename
+        counter = 1
+        while save_path.exists():
+            stem = save_path.stem
+            suffix = save_path.suffix
+            save_path = downloads_dir / f"{stem}_{counter}{suffix}"
+            counter += 1
+        
+        # Download the image
+        try:
+            with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+                response = client.get(
+                    image_url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) Chrome/120.0.0.0",
+                        "Referer": self.page.url,
+                    }
+                )
+                response.raise_for_status()
+                
+                # Verify it's an image
+                content_type = response.headers.get("content-type", "")
+                if "image" not in content_type and not any(
+                    image_url.lower().endswith(ext) 
+                    for ext in [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"]
+                ):
+                    return ToolResult(
+                        success=False,
+                        message=f"URL does not appear to be an image. Content-Type: {content_type}",
+                    )
+                
+                # Save the image
+                save_path.write_bytes(response.content)
+                
+                return ToolResult(
+                    success=True,
+                    message=f"Downloaded image to: {save_path}",
+                    data={
+                        "path": str(save_path),
+                        "filename": save_path.name,
+                        "size_bytes": len(response.content),
+                        "source_url": image_url,
+                    },
+                )
+                
+        except httpx.HTTPStatusError as e:
+            return ToolResult(
+                success=False,
+                message=f"HTTP error downloading image: {e.response.status_code}",
+            )
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                message=f"Error downloading image: {e}",
+            )
     
     # Helper methods for state extraction
     def get_page_state(self, max_text_chars: int = 8000, max_links: int = 15) -> dict[str, Any]:

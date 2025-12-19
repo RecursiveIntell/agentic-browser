@@ -34,6 +34,9 @@ You have access to these browser actions:
 - press: { "key": "Enter|Tab|..." }
 - scroll: { "amount": 800 }
 - extract_visible_text: { "max_chars": 8000 }
+- download_image: { }  # Downloads the largest image on the page to ~/Downloads
+- download_image: { "selector": "img.main" }  # Download specific image by selector
+- download_image: { "url": "https://example.com/image.jpg" }  # Download by direct URL
 - done: { "summary": "what you accomplished" }
 
 === CLICK SELECTOR FORMAT ===
@@ -49,6 +52,12 @@ EXAMPLES:
 ❌ WRONG: {"action": "click", "args": {"selector": "r/artificial"}}
 ❌ WRONG: {"action": "click", "args": {"selector": "Read More"}}
 
+=== IMAGE DOWNLOAD ===
+To download an image:
+1. Navigate to a page with images (e.g., Pixabay, Pexels, Unsplash)
+2. Optionally navigate to the image detail page for higher resolution
+3. Call download_image with no args to auto-download the largest image
+
 CRITICAL RULES:
 1. ALWAYS use DuckDuckGo for search (https://duckduckgo.com) - Google blocks AI agents!
 2. Only use COMPLETE URLs starting with https://
@@ -58,7 +67,7 @@ CRITICAL RULES:
 
 Respond with JSON:
 {
-  "action": "goto|click|type|press|scroll|extract_visible_text|done",
+  "action": "goto|click|type|press|scroll|extract_visible_text|download_image|done",
   "args": { ... },
   "rationale": "brief reason"
 }"""

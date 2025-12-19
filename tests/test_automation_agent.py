@@ -17,15 +17,30 @@ class TestAutomationAgentSecurity:
     def test_at_schedule_no_shell_true(self):
         """Verify _at_schedule does not use shell=True (security requirement)."""
         import inspect
+        import ast
         from agentic_browser.graph.agents import automation_agent
         
         # Read the source code of the module
         source = inspect.getsource(automation_agent)
         
-        # Count occurrences of shell=True (should be 0)
-        shell_true_count = source.count("shell=True")
-        assert shell_true_count == 0, (
-            f"Found {shell_true_count} occurrences of shell=True in automation_agent.py. "
+        # Parse the source to find actual shell=True in code (not comments/docstrings)
+        # Count literal occurrences but exclude those in strings (docstrings/comments)
+        # Simple approach: count "shell=True" but subtract occurrences in triple-quoted strings
+        
+        # More robust: check the AST for keyword arguments
+        tree = ast.parse(source)
+        shell_true_calls = []
+        
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                for keyword in node.keywords:
+                    if keyword.arg == "shell":
+                        # Check if value is True
+                        if isinstance(keyword.value, ast.Constant) and keyword.value.value is True:
+                            shell_true_calls.append(node.lineno)
+        
+        assert len(shell_true_calls) == 0, (
+            f"Found shell=True at lines {shell_true_calls} in automation_agent.py. "
             "This is a security risk - use subprocess.run with args list instead."
         )
     
