@@ -4,20 +4,23 @@ A Linux-first **multi-agent system** that controls your **web browser**, **local
 
 ## 🚀 Key Features
 
-*   **12-Node Agent Architecture**: Built on [LangGraph](https://langchain-ai.github.io/langgraph/) with a Supervisor that routes to 11 specialized agents.
+*   **13-Node Agent Architecture**: Built on [LangGraph](https://langchain-ai.github.io/langgraph/) with a Supervisor that routes to 12 specialized agents including Planner and Retrospective agents for complex task handling.
 *   **Multi-Provider LLM Support**: 
-    *   **OpenAI** (GPT-4o, o1-preview)
+    *   **OpenAI** (GPT-4o, o1-preview, o3-mini)
     *   **Anthropic** (Claude 3.5 Sonnet, Claude 3 Opus)
     *   **Google** (Gemini 1.5 Pro/Flash, Gemini 2.0)
     *   **LM Studio** (Local LLMs - Llama 3, Qwen 2.5)
-*   **Comprehensive Automation**: Browser, OS, research, code analysis, and 6 new specialized agents.
-*   **Safety Guardrails**: Risk-based permissions with user approval for dangerous operations.
-*   **Modern GUI**: Dark-themed interface with real-time progress tracking.
+*   **Intelligent Research**: Unique URL tracking, CAPTCHA detection, and automatic content extraction with minimum source requirements.
+*   **Safety Guardrails**: Policy engine with risk-based permissions, typed tool schemas, and user approval for dangerous operations.
+*   **Modern GUI**: Dark-themed interface with real-time progress tracking and settings persistence.
+*   **Comprehensive Testing**: 14 test suites covering integration, tool schemas, policy engine, and provider adapters.
 
 ## 🤖 Available Agents
 
 | Agent | Purpose | Example |
 |-------|---------|---------|
+| **Supervisor** | Task routing & orchestration | Routes to appropriate agents |
+| **Planner** | Complex task decomposition | Multi-step task planning |
 | **Browser** | Web navigation & interaction | "Navigate to github.com" |
 | **Research** | Multi-source web research | "Research quantum computing" |
 | **OS** | File operations & shell commands | "List files in Downloads" |
@@ -28,6 +31,7 @@ A Linux-first **multi-agent system** that controls your **web browser**, **local
 | **Media** | Video/audio/image processing | "Convert video to MP3" |
 | **Package** | Python/Node.js environment setup | "Create a venv and install Flask" |
 | **Automation** | Notifications & scheduling | "Remind me in 5 minutes" |
+| **Retrospective** | Learning from past actions | Improves future task handling |
 
 ## 📦 Installation
 
@@ -165,17 +169,37 @@ Actions are classified by risk level:
 
 ## 📈 Recent Updates
 
+### Research Agent Improvements (v0.4.0)
+- **Unique URL Tracking**: Counts unique content URLs visited (excluding search engines) rather than extraction count
+- **CAPTCHA Detection**: Automatically detects blocked/CAPTCHA pages and marks them as visited to break loops
+- **Hallucinated Selector Detection**: Detects when LLM suggests non-existent elements, forces scroll to reveal more content
+- **Smart Scroll Integration**: Auto-scrolls when agent tries to click duplicate links, updates LLM context after scrolls
+- **Click Failure Handling**: Prevents infinite retry loops on failed clicks with proper detection and recovery
+- **Shared State**: `clicked_selectors` now shared between browser and research agents to avoid re-clicking
+
+### Integration & Testing (v0.4.0)
+- **14 Comprehensive Test Suites**: Including integration tests, tool schemas, policy engine, and provider adapters
+- **State Schema Validation**: Tests verify all agent state fields and operator configurations
+- **Function Signature Tests**: Validates all tool functions have correct return types and parameters
+
+### Bug Fixes (v0.4.0)
+- **Scroll Args Performance**: Fixed unbounded growth of scroll arguments in state
+- **Auto-Extract Loop**: Marks URLs as visited after extraction to prevent re-extraction
+- **Source Numbering**: Fixed research agent source numbering and scroll hints
+- **Context Update**: Forces content extraction after scroll to update LLM context
+- **State Fields**: Added `last_action_was_scroll` as proper state field with reducer
+
 ### Safety & Reliability (v0.3.0)
 - **Typed Tool Schemas**: All OS/browser actions now use Pydantic validation - no more raw shell strings
 - **Policy Engine**: Hard denylist for dangerous commands (`rm -rf /`, fork bombs), dry-run mode
 - **Structured Memory Store**: JSON-backed storage for known sites, directories, and recipes with PII redaction
 - **Logging Framework**: Debug prints replaced with `logging` module (enable with `AGENTIC_BROWSER_DEBUG=1`)
 
-### Agent Improvements
-- **Smart Routing**: Supervisor correctly routes to all 10+ agent types (sysadmin, network, etc.)
-- **Research Quality**: Increased minimum sources to 5, better instruction following
+### Agent Improvements (v0.3.0)
+- **Smart Routing**: Supervisor correctly routes to all 12+ agent types (sysadmin, network, etc.)
 - **Dynamic Paths**: OS agent uses `Path.home()` instead of hardcoded paths
 - **o3 Model Support**: Fixed empty response issues with OpenAI reasoning models
+- **Provider Adapters**: Native adapters for Anthropic, Google GenAI, and OpenAI APIs
 
 ### CLI Features
 - `agentic-browser memory --show`: View stored sites/directories/recipes
