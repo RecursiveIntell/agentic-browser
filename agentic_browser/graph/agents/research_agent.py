@@ -158,6 +158,7 @@ Respond with JSON:
         
         # Patterns to match (order matters - more specific first)
         patterns = [
+            r'(\d+)\s+(?:[\w]+\s+)?(?:sources?|sites?|websites?|webpages?|pages?)',
             r'(?:at\s*least|atleast|minimum|min)\s+(\d+)\s+(?:sources?|sites?|websites?|webpages?|pages?)',
             r'(\d+)\+\s*(?:sources?|sites?|websites?|webpages?|pages?)',
             r'from\s+(\d+)\s+(?:sources?|sites?|websites?|webpages?|pages?)',
@@ -350,7 +351,7 @@ Visible content (truncated):
 {page_state.get('visible_text', '')[:800]}
 
 Data collected (summary):
-{json.dumps(state['extracted_data'], indent=2)[:300] if state['extracted_data'] else '(none yet)'}
+{json.dumps(state['extracted_data'], indent=2)[:1200] if state['extracted_data'] else '(none yet)'}
 """
         # CRITICAL: Guard against task_context explosion
         MAX_TASK_CONTEXT = 8000
@@ -455,21 +456,16 @@ Data collected (summary):
             
             if action_data.get("action") == "done":
                 # HARD BLOCK: Reject 'done' if insufficient research content
-                # Check unique content sites visited (reuse logic from above)
-                search_engines = ['duckduckgo.com', 'google.com/search', 'bing.com/search', 'yahoo.com/search']
-                content_urls = [
-                    u for u in state.get('visited_urls', []) 
-                    if u and not any(se in u.lower() for se in search_engines)
-                ]
-                unique_sites = set(u.split('?')[0].rstrip('/') for u in content_urls)
-                sites_visited = len(unique_sites)
+                # Count research_source_N keys in extracted_data (more reliable than visited_urls
+                # because visited_urls doesn't include the current extraction yet)
+                research_sources_count = len([k for k in state.get('extracted_data', {}).keys() if 'research_source' in k])
                 
                 # Use dynamic MIN_SOURCES from goal
                 MIN_SOURCES = self._parse_min_sources_from_goal(state['goal'])
                 
-                if sites_visited < MIN_SOURCES:
+                if research_sources_count < MIN_SOURCES:
                     # Need to visit more sites - force extraction won't help, need to navigate
-                    print(f"[RESEARCH] Blocking done: only visited {sites_visited}/{MIN_SOURCES} unique sites (user requested {MIN_SOURCES})")
+                    print(f"[RESEARCH] Blocking done: only have {research_sources_count}/{MIN_SOURCES} research sources extracted (user requested {MIN_SOURCES})")
                     action_data = {
                         "action": "back",  # Go back to find more sources
                         "args": {}

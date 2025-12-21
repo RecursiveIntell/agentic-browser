@@ -194,6 +194,28 @@ Actions are classified by risk level:
 
 ## 📈 Recent Updates
 
+### Code Quality & Best Practices (v0.7.1)
+- **Type Safety**: New `types.py` module with typed dataclasses (`ActionData`, `TokenUsage`, `PageState`) for better IDE support
+- **Ruff Integration**: Linting and formatting configured in `pyproject.toml` (run `ruff check --fix`)
+- **mypy Support**: Static type checking configured, `py.typed` marker for PEP 561 compliance
+- **Structured Logging**: Debug `print()` statements migrated to `logging` module across core agents
+- **TypedDict State**: All internal state keys now properly typed in `AgentState` schema
+
+### Development Setup
+```bash
+# Install with dev dependencies
+pip install -e ".[dev]"
+
+# Run linter (auto-fixes most issues)
+ruff check agentic_browser/ --fix
+
+# Run type checker (informational)
+mypy agentic_browser/
+
+# Run tests
+pytest tests/ -v
+```
+
 ### Performance Revolution (v0.7.0)
 - **Asynchronous Core**: Migration to non-blocking I/O for database writes, eliminating UI freezes during long runs.
 - **Knowledge Base Caching**: 500-entry LRU embedding cache with MD5 hashing, delivering 1000x speedup for repeated queries.

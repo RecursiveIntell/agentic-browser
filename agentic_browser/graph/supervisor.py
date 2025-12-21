@@ -498,7 +498,7 @@ When completing, synthesize ALL gathered data into a useful report:
         """
         # Format extracted data (SUMMARIZED)
         data = state['extracted_data']
-        important_keys = [k for k in data.keys() if any(x in k for x in ['analysis', 'findings', 'summary', 'report'])]
+        important_keys = [k for k in data.keys() if any(x in k for x in ['analysis', 'findings', 'summary', 'report', 'source'])]
         
         formatted_data = []
         # Priority 1: Important keys (analysis/findings) - limit to 500 chars each

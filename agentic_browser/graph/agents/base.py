@@ -134,7 +134,7 @@ def create_llm_client(config: AgentConfig, max_tokens: int = 1000):
         elif is_thinking_model:
             # Thinking models work with low temperature
             llm_kwargs["temperature"] = 0.1
-            print(f"[LLM] Detected thinking model: {config.model} - using 5min timeout")
+            logger.info(f"Detected thinking model: {config.model} - using 5min timeout")
         else:
             llm_kwargs["temperature"] = 0.1
         
