@@ -76,24 +76,24 @@ agentic gui
 ### CLI Mode
 ```bash
 # Research task
-agentic-browser run "Research the latest developments in AI agents"
+agentic run "Research the latest developments in AI agents"
 
 # Code analysis
-agentic-browser run "Analyze my project in ~/Coding/MyApp"
+agentic run "Analyze my project in ~/Coding/MyApp"
 
 # System monitoring
-agentic-browser run "Check what's using my disk space"
+agentic run "Check what's using my disk space"
 
 # Media conversion
-agentic-browser run "Convert ~/Videos/presentation.mp4 to MP3"
+agentic run "Convert ~/Videos/presentation.mp4 to MP3"
 
 # Network diagnostics
-agentic-browser run "Check if my web server on port 8080 is responding"
+agentic run "Check if my web server on port 8080 is responding"
 ```
 
 ## 🛠️ Configuration
 
-Settings stored in `~/.agentic_browser/settings.json`.
+Settings stored in `~/.Agentic-AiDENS/settings.json`.
 
 ### CLI Options
 | Flag | Description |
