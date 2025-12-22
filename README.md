@@ -5,7 +5,7 @@ A Linux-first **multi-agent system** that controls your **web browser**, **local
 ## 🚀 Key Features
 
 *   **13-Node Agent Architecture**: Built on [LangGraph](https://langchain-ai.github.io/langgraph/) with a Supervisor that routes to 12 specialized agents including Planner and Retrospective agents for complex task handling.
-*   *supports any model exposed by your provider API. Some providers require custom adapters; unsupported edge cases can be reported via Issues.
+*   *Supports any model exposed by your provider API. Some providers require custom adapters; unsupported edge cases can be reported via Issues.
 *   **Multi-Provider LLM Support**: 
     *   **OpenAI** (GPT-5, GPT-5.1, GPT-5.2, GPT-4o, o1, o3-mini)
     *   **Anthropic** (Claude 3.5 Sonnet, Claude 3 Opus)
