@@ -31,7 +31,7 @@ PROVIDER_ENDPOINTS = {
 PROVIDER_DEFAULT_MODELS = {
     Provider.LM_STUDIO: "qwen2.5:7b",
     Provider.OPENAI: "gpt-4o-mini",
-    Provider.ANTHROPIC: "claude-3-haiku-20240307",
+    Provider.ANTHROPIC: "claude-3-5-sonnet-20241022",
     Provider.GOOGLE: "gemini-1.5-flash",
     Provider.OPENROUTER: "openai/gpt-4o-mini",
 }
@@ -51,11 +51,10 @@ PROVIDER_MODEL_SUGGESTIONS = {
         "gpt-3.5-turbo",
     ],
     Provider.ANTHROPIC: [
-        "claude-3-haiku-20240307",
-        "claude-3-sonnet-20240229",
-        "claude-3-opus-20240229",
+        "claude-3-5-haiku-20241022",
         "claude-3-5-sonnet-20241022",
         "claude-3-5-sonnet-20240620",
+        "claude-3-haiku-20240307",
     ],
     Provider.GOOGLE: [
         "gemini-1.5-flash",
