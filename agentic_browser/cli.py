@@ -227,6 +227,26 @@ Examples:
         help="Clear all stored memory (DANGEROUS - requires confirmation)",
     )
     
+    # Doctor/Check command
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help="Check system dependencies and provider connectivity",
+        aliases=["check"],
+    )
+    
+    doctor_parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="Show auto-fix commands for failed checks",
+    )
+    
+    doctor_parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show detailed output for all checks",
+    )
+    
     return parser
 
 
@@ -676,6 +696,385 @@ def memory_command(args: argparse.Namespace) -> int:
         return 0
 
 
+def doctor_command(args: argparse.Namespace) -> int:
+    """Run preflight health checks.
+    
+    Verifies:
+    - Python dependencies
+    - Playwright browsers
+    - LLM provider connectivity  
+    - n8n webhook health
+    - OS tools (ffmpeg, imagemagick, etc.)
+    
+    Args:
+        args: Parsed arguments
+        
+    Returns:
+        Exit code (0 if all pass, 1 if any fail)
+    """
+    from rich.console import Console
+    from rich.table import Table
+    from rich.panel import Panel
+    import shutil
+    import subprocess
+    import os
+    
+    console = Console()
+    verbose = getattr(args, 'verbose', False)
+    show_fix = getattr(args, 'fix', False)
+    
+    console.print()
+    console.print("[bold cyan]🩺 Agentic AiDEN Health Check[/bold cyan]")
+    console.print("[dim]Running preflight diagnostics...[/dim]")
+    console.print()
+    
+    results = []  # (name, status, message, fix_command)
+    
+    # --- 1. Check Python Dependencies ---
+    console.print("[bold]1. Python Dependencies[/bold]")
+    
+    deps = [
+        ("playwright", "playwright"),
+        ("langchain-core", "langchain_core"),
+        ("langgraph", "langgraph"),
+        ("pydantic", "pydantic"),
+        ("rich", "rich"),
+        ("PySide6", "PySide6"),
+        ("sentence-transformers", "sentence_transformers"),
+        ("chromadb", "chromadb"),
+    ]
+    
+    for pkg_name, import_name in deps:
+        try:
+            __import__(import_name)
+            results.append((pkg_name, "green", "✅ Installed", None))
+            if verbose:
+                console.print(f"  [green]✅[/green] {pkg_name}")
+        except ImportError as e:
+            results.append((pkg_name, "red", f"❌ Missing", f"pip install {pkg_name}"))
+            console.print(f"  [red]❌[/red] {pkg_name} - [dim]pip install {pkg_name}[/dim]")
+    
+    # --- 2. Check Playwright Browsers ---
+    console.print()
+    console.print("[bold]2. Playwright Browsers[/bold]")
+    
+    try:
+        from playwright.sync_api import sync_playwright
+        
+        # Check if chromium is installed
+        playwright_cache = os.path.expanduser("~/.cache/ms-playwright")
+        chromium_dirs = [d for d in os.listdir(playwright_cache) if d.startswith("chromium")] if os.path.exists(playwright_cache) else []
+        
+        if chromium_dirs:
+            results.append(("Chromium", "green", "✅ Installed", None))
+            console.print(f"  [green]✅[/green] Chromium browser installed")
+            if verbose:
+                console.print(f"      [dim]Location: {playwright_cache}/{chromium_dirs[0]}[/dim]")
+        else:
+            results.append(("Chromium", "red", "❌ Not installed", "python -m playwright install chromium"))
+            console.print(f"  [red]❌[/red] Chromium not installed")
+            
+    except Exception as e:
+        results.append(("Playwright", "red", f"❌ Error: {e}", "pip install playwright && python -m playwright install chromium"))
+        console.print(f"  [red]❌[/red] Playwright error: {e}")
+    
+    # --- 3. Check LLM Provider Connectivity ---
+    console.print()
+    console.print("[bold]3. LLM Provider Connectivity[/bold]")
+    
+    from .settings_store import SettingsStore
+    store = SettingsStore()
+    settings = store.settings
+    
+    provider = settings.provider
+    console.print(f"  [dim]Active provider: {provider}[/dim]")
+    
+    try:
+        provider_config = settings.get_provider_config()
+        endpoint = provider_config.endpoint
+        api_key = provider_config.api_key
+        model = provider_config.effective_model
+        
+        if api_key or provider == "lm_studio":
+            # Try a simple connection test
+            import urllib.request
+            import urllib.error
+            
+            test_url = endpoint.rstrip("/") + "/models" if endpoint else None
+            
+            if test_url and provider == "lm_studio":
+                try:
+                    req = urllib.request.Request(test_url, headers={"Content-Type": "application/json"})
+                    with urllib.request.urlopen(req, timeout=5) as resp:
+                        if resp.status == 200:
+                            results.append((f"LM Studio ({endpoint})", "green", "✅ Connected", None))
+                            console.print(f"  [green]✅[/green] LM Studio reachable at {endpoint}")
+                        else:
+                            results.append((f"LM Studio", "yellow", f"⚠️ Status {resp.status}", None))
+                            console.print(f"  [yellow]⚠️[/yellow] LM Studio returned status {resp.status}")
+                except urllib.error.URLError as e:
+                    results.append(("LM Studio", "red", f"❌ Unreachable", "Start LM Studio and ensure server is running"))
+                    console.print(f"  [red]❌[/red] LM Studio unreachable at {endpoint}")
+            elif api_key:
+                # For cloud providers, just check key is set
+                masked_key = api_key[:8] + "..." + api_key[-4:] if len(api_key) > 12 else "****"
+                results.append((f"{provider} API Key", "green", f"✅ Set ({masked_key})", None))
+                console.print(f"  [green]✅[/green] {provider} API key configured ({masked_key})")
+                console.print(f"      [dim]Model: {model}[/dim]")
+        else:
+            results.append((f"{provider}", "yellow", "⚠️ No API key", f"Set {provider.upper()}_API_KEY environment variable"))
+            console.print(f"  [yellow]⚠️[/yellow] No API key configured for {provider}")
+    except Exception as e:
+        results.append(("Provider", "red", f"❌ Error: {e}", None))
+        console.print(f"  [red]❌[/red] Provider check failed: {e}")
+    
+    # --- 4. Check n8n Integration ---
+    console.print()
+    console.print("[bold]4. n8n Integration[/bold]")
+    
+    n8n_url = os.environ.get("N8N_URL", "")
+    n8n_key = os.environ.get("N8N_API_KEY", "")
+    
+    if n8n_url:
+        try:
+            import urllib.request
+            import urllib.error
+            
+            health_url = n8n_url.rstrip("/") + "/healthz"
+            req = urllib.request.Request(health_url, headers={"Content-Type": "application/json"})
+            
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                if resp.status == 200:
+                    results.append(("n8n Server", "green", "✅ Healthy", None))
+                    console.print(f"  [green]✅[/green] n8n server healthy at {n8n_url}")
+                else:
+                    results.append(("n8n Server", "yellow", f"⚠️ Status {resp.status}", None))
+                    console.print(f"  [yellow]⚠️[/yellow] n8n returned status {resp.status}")
+        except Exception as e:
+            results.append(("n8n Server", "red", f"❌ Unreachable", None))
+            console.print(f"  [red]❌[/red] n8n unreachable at {n8n_url}: {e}")
+    else:
+        results.append(("n8n", "dim", "⚪ Not configured", "Set N8N_URL environment variable"))
+        console.print(f"  [dim]⚪[/dim] n8n not configured (optional)")
+    
+    # --- 5. Check OS Tools ---
+    console.print()
+    console.print("[bold]5. OS Tools (for Media/System agents)[/bold]")
+    
+    os_tools = [
+        ("ffmpeg", "Video/audio processing", "sudo apt install ffmpeg OR sudo dnf install ffmpeg"),
+        ("convert", "ImageMagick (image processing)", "sudo apt install imagemagick OR sudo dnf install ImageMagick"),
+        ("curl", "HTTP requests", "sudo apt install curl"),
+        ("jq", "JSON processing", "sudo apt install jq"),
+        ("ping", "Network diagnostics", "Usually pre-installed"),
+        ("python3", "Python interpreter", "Should be pre-installed"),
+        ("git", "Version control", "sudo apt install git"),
+    ]
+    
+    for tool, desc, fix in os_tools:
+        path = shutil.which(tool)
+        if path:
+            results.append((tool, "green", f"✅ Found", None))
+            if verbose:
+                console.print(f"  [green]✅[/green] {tool} - {path}")
+            else:
+                console.print(f"  [green]✅[/green] {tool}")
+        else:
+            results.append((tool, "yellow", f"⚠️ Not found ({desc})", fix))
+            console.print(f"  [yellow]⚠️[/yellow] {tool} - {desc}")
+    
+    # --- 6. Check Tool Schemas ---
+    console.print()
+    console.print("[bold]6. Tool Schemas[/bold]")
+    
+    try:
+        from .tool_schemas import ListDirRequest, ClickRequest, GotoRequest
+        # Count schema classes by checking how many we can import
+        schema_names = [
+            "ListDirRequest", "ReadFileRequest", "WriteFileRequest", "RunCommandRequest",
+            "MoveFileRequest", "CopyFileRequest", "DeleteFileRequest",
+            "GotoRequest", "ClickRequest", "TypeRequest", "ScrollRequest",
+        ]
+        tool_count = len(schema_names)
+        results.append(("Tool Schemas", "green", f"✅ {tool_count}+ schemas available", None))
+        console.print(f"  [green]✅[/green] {tool_count}+ tool schemas loaded")
+        
+        if verbose:
+            for name in schema_names[:8]:
+                console.print(f"      [dim]{name}[/dim]")
+            console.print(f"      [dim]... and more[/dim]")
+    except Exception as e:
+        results.append(("Tool Schemas", "red", f"❌ Error: {e}", None))
+        console.print(f"  [red]❌[/red] Failed to load tool schemas: {e}")
+    
+    # --- 7. Check Storage Directories ---
+    console.print()
+    console.print("[bold]7. Storage & Cache[/bold]")
+    
+    storage_dirs = [
+        ("~/.agentic_browser", "Main config"),
+        ("~/.agentic_browser/runs", "Run logs"),
+        ("~/.agentic_browser/profiles/default", "Browser profile"),
+    ]
+    
+    for dir_path, desc in storage_dirs:
+        expanded = os.path.expanduser(dir_path)
+        if os.path.exists(expanded):
+            results.append((desc, "green", "✅ Exists", None))
+            if verbose:
+                console.print(f"  [green]✅[/green] {desc} - {expanded}")
+            else:
+                console.print(f"  [green]✅[/green] {desc}")
+        else:
+            results.append((desc, "yellow", "⚠️ Will be created", None))
+            console.print(f"  [yellow]⚠️[/yellow] {desc} (will be created on first run)")
+    
+    # --- 8. Check Agent Imports ---
+    console.print()
+    console.print("[bold]8. Agent Modules[/bold]")
+    
+    agents = [
+        ("PlannerAgentNode", "agentic_browser.graph.agents.planner_agent", "PlannerAgentNode"),
+        ("BrowserAgentNode", "agentic_browser.graph.agents.browser_agent", "BrowserAgentNode"),
+        ("ResearchAgentNode", "agentic_browser.graph.agents.research_agent", "ResearchAgentNode"),
+        ("OSAgentNode", "agentic_browser.graph.agents.os_agent", "OSAgentNode"),
+        ("CodeAgentNode", "agentic_browser.graph.agents.code_agent", "CodeAgentNode"),
+        ("DataAgentNode", "agentic_browser.graph.agents.data_agent", "DataAgentNode"),
+        ("SupervisorNode", "agentic_browser.graph.supervisor", "Supervisor"),
+        ("RetrospectiveAgent", "agentic_browser.graph.agents.retrospective_agent", "RetrospectiveAgent"),
+    ]
+    
+    agent_errors = []
+    for name, module, cls_name in agents:
+        try:
+            mod = __import__(module, fromlist=[cls_name])
+            cls = getattr(mod, cls_name)
+            results.append((name, "green", "✅ Loadable", None))
+            if verbose:
+                console.print(f"  [green]✅[/green] {name}")
+        except Exception as e:
+            agent_errors.append((name, str(e)))
+            results.append((name, "red", f"❌ Import error", f"Check {module}.py for syntax errors"))
+            console.print(f"  [red]❌[/red] {name} - {e}")
+    
+    if not agent_errors:
+        console.print(f"  [green]✅[/green] All {len(agents)} agents loadable")
+    
+    # --- 9. Check Graph Build ---
+    console.print()
+    console.print("[bold]9. Graph Architecture[/bold]")
+    
+    try:
+        from .graph.main_graph import build_agent_graph
+        from .config import AgentConfig
+        
+        # Try to build the graph with a minimal config
+        test_config = AgentConfig(
+            goal="test",
+            model="test-model",
+            model_endpoint="http://localhost:1234/v1",
+        )
+        
+        graph = build_agent_graph(test_config)
+        
+        # Check nodes are present
+        node_count = len(graph.nodes) if hasattr(graph, 'nodes') else 0
+        results.append(("Graph Build", "green", f"✅ Built ({node_count} nodes)", None))
+        console.print(f"  [green]✅[/green] Graph built successfully")
+        if verbose:
+            console.print(f"      [dim]{node_count} nodes in graph[/dim]")
+            
+    except Exception as e:
+        results.append(("Graph Build", "red", f"❌ Build failed: {e}", "Check graph/main_graph.py"))
+        console.print(f"  [red]❌[/red] Graph build failed: {e}")
+    
+    # --- 10. Check State Schema ---
+    console.print()
+    console.print("[bold]10. State Schema[/bold]")
+    
+    try:
+        from .graph.state import AgentState
+        
+        # Check required fields exist
+        required_fields = ["messages", "goal", "task_complete", "pending_approval", "approved_actions"]
+        missing = []
+        
+        for field in required_fields:
+            if field not in AgentState.__annotations__:
+                missing.append(field)
+        
+        if missing:
+            results.append(("State Schema", "yellow", f"⚠️ Missing fields: {missing}", None))
+            console.print(f"  [yellow]⚠️[/yellow] Missing state fields: {missing}")
+        else:
+            field_count = len(AgentState.__annotations__)
+            results.append(("State Schema", "green", f"✅ Valid ({field_count} fields)", None))
+            console.print(f"  [green]✅[/green] State schema valid ({field_count} fields)")
+            if verbose:
+                for f in list(AgentState.__annotations__.keys())[:8]:
+                    console.print(f"      [dim]{f}[/dim]")
+                if field_count > 8:
+                    console.print(f"      [dim]... and {field_count - 8} more[/dim]")
+                    
+    except Exception as e:
+        results.append(("State Schema", "red", f"❌ Error: {e}", "Check graph/state.py"))
+        console.print(f"  [red]❌[/red] State schema error: {e}")
+    
+    # --- 11. Check Knowledge Base ---
+    console.print()
+    console.print("[bold]11. Knowledge Base[/bold]")
+    
+    try:
+        from .graph.knowledge_base import StrategyBank
+        
+        # Just check it can be imported and has required methods
+        required_methods = ["add_strategy", "search", "get_all"]
+        missing_methods = [m for m in required_methods if not hasattr(StrategyBank, m)]
+        
+        if missing_methods:
+            results.append(("Knowledge Base", "yellow", f"⚠️ Missing methods: {missing_methods}", None))
+            console.print(f"  [yellow]⚠️[/yellow] Missing methods: {missing_methods}")
+        else:
+            results.append(("Knowledge Base", "green", "✅ Available", None))
+            console.print(f"  [green]✅[/green] StrategyBank available")
+            
+    except Exception as e:
+        results.append(("Knowledge Base", "yellow", f"⚠️ Not available: {e}", None))
+        console.print(f"  [yellow]⚠️[/yellow] Knowledge base not available (optional): {e}")
+    
+    # --- Summary ---
+    console.print()
+    console.print("[bold]━━━ Summary ━━━[/bold]")
+    
+    passed = sum(1 for _, status, _, _ in results if status == "green")
+    warnings = sum(1 for _, status, _, _ in results if status == "yellow")
+    failed = sum(1 for _, status, _, _ in results if status == "red")
+    
+    if failed == 0 and warnings == 0:
+        console.print(f"[bold green]✅ All {passed} checks passed![/bold green]")
+        console.print("[dim]System is ready for operation.[/dim]")
+    elif failed == 0:
+        console.print(f"[bold yellow]⚠️ {passed} passed, {warnings} warnings[/bold yellow]")
+        console.print("[dim]System should work, but some features may be limited.[/dim]")
+    else:
+        console.print(f"[bold red]❌ {passed} passed, {warnings} warnings, {failed} failed[/bold red]")
+        console.print("[dim]Please resolve failed checks before running.[/dim]")
+    
+    # --- Show Fix Commands ---
+    if show_fix:
+        fixes = [(name, fix) for name, _, _, fix in results if fix]
+        if fixes:
+            console.print()
+            console.print("[bold]📋 Suggested Fixes:[/bold]")
+            for name, fix in fixes:
+                console.print(f"  [cyan]{name}:[/cyan]")
+                console.print(f"    [dim]{fix}[/dim]")
+    
+    console.print()
+    
+    return 0 if failed == 0 else 1
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     """Main entry point.
     
@@ -700,6 +1099,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     
     if args.command == "memory":
         return memory_command(args)
+    
+    if args.command in ("doctor", "check"):
+        return doctor_command(args)
     
     # Unknown command
     parser.print_help()

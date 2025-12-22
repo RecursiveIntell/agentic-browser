@@ -334,6 +334,8 @@ pytest tests/ -v
 - `agentic-browser run --json`: Output machine-readable JSON for pipeline integration
 - `agentic-browser memory --show`: View stored sites/directories/recipes
 - `agentic-browser memory --bootstrap`: Pre-seed common directories
+- `agentic-browser doctor`: Preflight health check (deps, providers, agents, graph)
+- `agentic-browser doctor --fix`: Show auto-fix commands for failed checks
 - `agentic-browser --dry-run`: See planned actions without execution
 - `agentic-browser --explain`: Show risk analysis for commands
 
