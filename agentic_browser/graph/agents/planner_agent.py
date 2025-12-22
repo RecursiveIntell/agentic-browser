@@ -26,6 +26,8 @@ class PlannerAgentNode(BaseAgent):
     
     SYSTEM_PROMPT = """You are a PLANNER agent. You run FIRST on every task to create an implementation plan.
 
+CORE PRINCIPLE: Decompose goals into steps, route via simple if-then rules.
+
 Your job is to:
 1. Analyze the user's goal
 2. Break it down into concrete steps

@@ -28,6 +28,8 @@ class Supervisor:
     
     SYSTEM_PROMPT = """You are a SUPERVISOR that routes tasks to specialized agents and synthesizes results.
 
+CORE PRINCIPLE: Decompose goals into steps, route via simple if-then rules.
+
 AVAILABLE AGENTS:
 - os: Find files, list directories, read/write local files, run shell commands
 - code: Analyze code projects, understand what apps do, read source files
