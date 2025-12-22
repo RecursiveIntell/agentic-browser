@@ -477,6 +477,42 @@ class MissionControlWindow(QMainWindow):
         self.cost_lbl.setStyleSheet(f"color: {THEME_TEXT_DIM};")
         header.addWidget(self.cost_lbl)
         
+        # Settings Button
+        self.settings_btn = QPushButton("⚙️ Settings")
+        self.settings_btn.setFont(QFont(FONT_UI, 10))
+        self.settings_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {THEME_BG_PANEL};
+                border: 1px solid {THEME_BORDER};
+                border-radius: 4px;
+                padding: 4px 12px;
+                color: {THEME_TEXT_MAIN};
+            }}
+            QPushButton:hover {{
+                background: {THEME_BORDER};
+            }}
+        """)
+        self.settings_btn.clicked.connect(self._on_settings)
+        header.addWidget(self.settings_btn)
+        
+        # Costs Button
+        self.costs_btn = QPushButton("💰 Costs")
+        self.costs_btn.setFont(QFont(FONT_UI, 10))
+        self.costs_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {THEME_BG_PANEL};
+                border: 1px solid {THEME_BORDER};
+                border-radius: 4px;
+                padding: 4px 12px;
+                color: {THEME_TEXT_MAIN};
+            }}
+            QPushButton:hover {{
+                background: {THEME_BORDER};
+            }}
+        """)
+        self.costs_btn.clicked.connect(self._on_costs)
+        header.addWidget(self.costs_btn)
+        
         main_layout.addLayout(header)
         
         # --- GOAL INPUT ---
@@ -768,6 +804,29 @@ class MissionControlWindow(QMainWindow):
         self.stop_btn.setEnabled(False)
         self.steering_input.setEnabled(False)
         self.goal_input.setEnabled(True)
+    
+    def _on_settings(self):
+        """Open settings dialog."""
+        from .settings_dialog import SettingsDialog
+        dialog = SettingsDialog(self)
+        if dialog.exec():
+            self.stream.add_event({
+                "type": "system",
+                "content": "⚙️ Settings updated",
+                "timestamp": datetime.now().strftime("%H:%M:%S"),
+            })
+    
+    def _on_costs(self):
+        """Open costs dialog showing API usage breakdown."""
+        from .cost_dialog import CostDialog
+        # Get current usage from agent thread if available
+        usage_data = {}
+        if self._agent_thread:
+            # Try to get accumulated usage
+            usage_data = getattr(self._agent_thread, '_accumulated_usage', {})
+        
+        dialog = CostDialog(self, usage_data)
+        dialog.exec()
     
     def _append_terminal(self, text: str):
         """Append text to the terminal view."""
