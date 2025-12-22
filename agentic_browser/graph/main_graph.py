@@ -283,12 +283,24 @@ class MultiAgentRunner:
                 },
             ):
                 # LIVE STEERING: Check input queue before processing
-                steering_messages = self._process_steering_queue()
+                steering_messages, approval_update = self._process_steering_queue()
                 
                 # PERSISTENCE: Update session store (THROTTLED for performance)
                 for node_name, node_state in event.items():
                     # Update current node for graph visualization
                     self._current_node = node_name
+                    
+                    # Apply approval update if present
+                    if approval_update:
+                        if approval_update.get("pending_approval") is None:
+                            node_state["pending_approval"] = None
+                        if "add_approved_action" in approval_update:
+                            action_key = approval_update["add_approved_action"]
+                            approved = node_state.get("approved_actions", [])
+                            if action_key not in approved:
+                                node_state["approved_actions"] = approved + [action_key]
+                        if "error" in approval_update:
+                            node_state["error"] = approval_update["error"]
                     
                     # Inject steering messages if present
                     if steering_messages and "messages" in node_state:
@@ -374,30 +386,50 @@ class MultiAgentRunner:
             else:
                 raise
     
-    def _process_steering_queue(self) -> list:
+    def _process_steering_queue(self) -> tuple[list, dict | None]:
         """Process any pending steering messages from the input queue.
         
         Returns:
-            List of SystemMessage objects to inject into agent state
+            Tuple of (messages list, approval_update dict or None)
         """
         messages = []
+        approval_update = None
         
         while not self.input_queue.empty():
             try:
                 item = self.input_queue.get_nowait()
                 if item.get("type") == "abort":
                     # Abort requested - return special message
-                    return [SystemMessage(content="[ABORT] User requested task cancellation. Wrap up immediately.")]
+                    return [SystemMessage(content="[ABORT] User requested task cancellation. Wrap up immediately.")], None
                 elif item.get("type") == "steering":
                     content = item.get("content", "")
                     if content:
                         messages.append(SystemMessage(
                             content=f"[USER INTERVENTION - HIGH PRIORITY] {content}"
                         ))
+                elif item.get("type") == "approval_response":
+                    # Handle user approval/rejection of pending action
+                    approved = item.get("approved", False)
+                    action = item.get("action", "")
+                    args = item.get("args", {})
+                    action_key = f"{action}:{hash(str(args))}"
+                    
+                    if approved:
+                        print(f"[GRAPH] ✅ User APPROVED action: {action}")
+                        approval_update = {
+                            "pending_approval": None,
+                            "add_approved_action": action_key,
+                        }
+                    else:
+                        print(f"[GRAPH] ❌ User REJECTED action: {action}")
+                        approval_update = {
+                            "pending_approval": None,
+                            "error": f"User rejected action: {action}",
+                        }
             except Exception:
                 break
         
-        return messages
+        return messages, approval_update
     
     @property
     def current_node(self) -> str:

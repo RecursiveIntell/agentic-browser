@@ -30,6 +30,7 @@ class AgentThread(QThread):
     signal_complete = Signal(bool, str)  # (success, final_answer)
     signal_error = Signal(str)       # Error message
     signal_terminal = Signal(str)    # Raw console output for Terminal tab
+    signal_approval_needed = Signal(dict)  # {action, args, risk_level, reason} - triggers approval dialog
     
     def __init__(
         self,
@@ -267,6 +268,17 @@ class AgentThread(QThread):
             self.signal_log.emit({
                 "type": "error",
                 "content": error,
+                "timestamp": datetime.now().strftime("%H:%M:%S"),
+            })
+        
+        # Check for pending approval (high-risk action)
+        pending = state.get("pending_approval")
+        if pending:
+            # Emit signal to GUI and log
+            self.signal_approval_needed.emit(pending)
+            self.signal_log.emit({
+                "type": "system",
+                "content": f"⚠️ APPROVAL REQUIRED: {pending.get('action')} (Risk: {pending.get('risk_level', 'HIGH')})",
                 "timestamp": datetime.now().strftime("%H:%M:%S"),
             })
         

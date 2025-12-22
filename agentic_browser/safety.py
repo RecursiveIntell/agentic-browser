@@ -234,6 +234,51 @@ class SafetyClassifier:
         
         return False, ""
     
+    # Hard denylist patterns - NEVER allowed even with approval
+    HARD_DENYLIST = [
+        r"sudo\s+rm\s+(-[rf]+\s+)*\s*/\s*$",  # sudo rm -rf /
+        r"rm\s+(-[rf]+\s+)*\s*/\s*$",          # rm -rf /
+        r"dd\s+.*\s+of=/dev/(sd[a-z]|nvme|vd)", # dd to disk device
+        r"mkfs\.\w+\s+/dev/(sd[a-z]|nvme|vd)",  # mkfs to disk
+        r">\s*/etc/(passwd|shadow|sudoers)",    # Overwrite auth files
+        r"rm\s+(-[rf]+\s+)*/etc/(passwd|shadow|sudoers)",
+        r"rm\s+(-[rf]+\s+)*/boot",              # Boot destruction
+        r"dd\s+.*\s+of=/boot",
+        r":\(\)\s*\{\s*:\|:",                   # Fork bomb
+    ]
+    
+    def is_blocked(self, action: str, args: dict[str, Any]) -> bool:
+        """Check if action is absolutely blocked (hard denylist).
+        
+        These actions are NEVER allowed, even with user approval.
+        
+        Args:
+            action: The action type
+            args: Action arguments
+            
+        Returns:
+            True if action is blocked
+        """
+        import re
+        
+        if action not in ("os_exec", "os_write_file", "os_delete_file"):
+            return False
+        
+        # Get the command/path to check
+        if action == "os_exec":
+            cmd = args.get("cmd", "")
+            argv = args.get("argv", [])
+            check_str = cmd or " ".join(argv)
+        else:
+            check_str = args.get("path", "")
+        
+        # Check against hard denylist
+        for pattern in self.HARD_DENYLIST:
+            if re.search(pattern, check_str, re.IGNORECASE):
+                return True
+        
+        return False
+    
     def _classify_click(
         self, 
         args: dict[str, Any], 

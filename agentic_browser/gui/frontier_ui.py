@@ -718,6 +718,7 @@ class MissionControlWindow(QMainWindow):
         self._agent_thread.signal_complete.connect(self._on_complete)
         self._agent_thread.signal_error.connect(self._on_error)
         self._agent_thread.signal_terminal.connect(self._append_terminal)
+        self._agent_thread.signal_approval_needed.connect(self._on_approval_needed)
         self._agent_thread.start()
         
         # Note: Screenshots are captured internally by agent thread
@@ -836,8 +837,63 @@ class MissionControlWindow(QMainWindow):
             # Try to get accumulated usage
             usage_data = getattr(self._agent_thread, '_accumulated_usage', {})
         
-        dialog = CostDialog(self, usage_data)
+        dialog = CostDialog(self)
         dialog.exec()
+    
+    def _on_approval_needed(self, pending: dict):
+        """Handle approval request from agent.
+        
+        Shows a dialog asking user to approve/reject the action,
+        then sends response back to agent via input_queue.
+        
+        Args:
+            pending: Dict with action, args, risk_level, reason
+        """
+        action = pending.get("action", "unknown")
+        args = pending.get("args", {})
+        risk_level = pending.get("risk_level", "HIGH")
+        reason = pending.get("reason", "")
+        
+        # Format the message
+        args_str = json.dumps(args, indent=2)[:500] if args else "{}"
+        message = (
+            f"<b>Action:</b> {action}<br>"
+            f"<b>Risk Level:</b> <span style='color: #f85149;'>{risk_level}</span><br>"
+            f"<b>Reason:</b> {reason}<br><br>"
+            f"<b>Arguments:</b><br><pre>{args_str}</pre>"
+        )
+        
+        # Show approval dialog
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("⚠️ Action Requires Approval")
+        msg_box.setTextFormat(Qt.TextFormat.RichText)
+        msg_box.setText(f"The agent wants to perform a <b>{risk_level}</b> risk action:")
+        msg_box.setInformativeText(message)
+        msg_box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        msg_box.setDefaultButton(QMessageBox.StandardButton.No)
+        msg_box.button(QMessageBox.StandardButton.Yes).setText("✅ Approve")
+        msg_box.button(QMessageBox.StandardButton.No).setText("❌ Reject")
+        
+        result = msg_box.exec()
+        approved = result == QMessageBox.StandardButton.Yes
+        
+        # Send response back to agent
+        if self._agent_thread:
+            self._agent_thread.input_queue.put({
+                "type": "approval_response",
+                "approved": approved,
+                "action": action,
+                "args": args,
+            })
+        
+        # Log the decision
+        self.stream.add_event({
+            "type": "system",
+            "content": f"{'✅ APPROVED' if approved else '❌ REJECTED'}: {action}",
+            "timestamp": datetime.now().strftime("%H:%M:%S"),
+        })
     
     def _append_terminal(self, text: str):
         """Append text to the terminal view."""

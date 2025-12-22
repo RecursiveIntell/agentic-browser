@@ -216,7 +216,9 @@ Actions are classified by risk level:
 | Result display shows "No Result" | Fixed | Update to latest |
 | Multi-image downloads incomplete | Fixed | Auto-scrolls between downloads |
 | Embedding model timeouts | Fixed | Uses `device='cpu'` explicitly |
-| OS commands bypass approval | Fixed | Safety check added |
+| OS commands bypass approval | Fixed | Safety check + GUI approval dialog |
+| High-risk commands cause loops | Fixed | Approval signal flow added |
+| Cost button crashes | Fixed | Signature mismatch resolved |
 | Some GUI elements misaligned | In Progress | Use CLI for critical tasks |
 
 ## 🐛 Troubleshooting
@@ -233,6 +235,13 @@ Actions are classified by risk level:
 
 ### GUI Refactoring & Agent Robustness (v0.7.2)
 - **New Mission Control GUI** (`frontier_ui.py`): Complete rewrite of the GUI with dark neural theme, multi-panel layout (Neural Stream, State Tree, Browser Viewport), and proper signal-based IPC via `agent_thread.py`.
+- **Policy Layer Approval Flow Fix**: Complete overhaul of the approval system:
+    - Added `is_blocked()` method to `SafetyClassifier` for hard denylist patterns (rm -rf /, fork bombs, etc.)
+    - New `signal_approval_needed` signal in `AgentThread` for thread-safe GUI communication
+    - GUI approval dialog (`_on_approval_needed`) shows action details and risk level
+    - Graph-level `approval_response` handling updates `approved_actions` state
+    - Fixes infinite loop when high-risk OS commands require approval
+- **Cost Button Fix**: Resolved signature mismatch crash in cost dialog.
 - **Click Timeout Fix**: Increased from 1500ms → 5000ms to handle slow-loading pages (LinkedIn, etc.) without false failures.
 - **LLM Refusal Detection**: Both browser and research agents now detect refusal messages ("I'm unable to assist...") and fallback to scroll instead of crashing.
 - **Loop Prevention Overhaul**: 
