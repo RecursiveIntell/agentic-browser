@@ -88,6 +88,32 @@ class KnowledgeBase:
             from concurrent.futures import ThreadPoolExecutor
             cls._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="kb_")
         return cls._executor
+    
+    @classmethod
+    def preload_embedding_model(cls) -> bool:
+        """Preload embedding model at startup to avoid cold-start delays.
+        
+        Call this early (e.g., during GUI init) to front-load the 3-5s model load.
+        This prevents timeouts in tiered_recall_async() on first invocation.
+        
+        Returns:
+            True if successful, False otherwise.
+        """
+        try:
+            from sentence_transformers import SentenceTransformer
+            if not hasattr(cls, '_shared_embedding_model'):
+                print("[KNOWLEDGE] Preloading embedding model...")
+                # CRITICAL: Use explicit device='cpu' to avoid meta tensor issues
+                cls._shared_embedding_model = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
+                print("[KNOWLEDGE] Embedding model ready")
+            return True
+        except ImportError:
+            print("[KNOWLEDGE] sentence-transformers not installed, semantic search disabled")
+            return False
+        except Exception as e:
+            error_type = type(e).__name__
+            print(f"[KNOWLEDGE] Preload failed ({error_type}): {e}")
+            return False
         
     def _init_databases(self) -> None:
         """Initialize all agent-specific databases."""
@@ -330,10 +356,19 @@ class KnowledgeBase:
         
         try:
             from sentence_transformers import SentenceTransformer
-            if not hasattr(self, '_embedding_model'):
-                self._embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
             
-            embedding = self._embedding_model.encode(text)
+            # Use class-level shared model if preloaded, else load instance model
+            if hasattr(self.__class__, '_shared_embedding_model'):
+                model = self.__class__._shared_embedding_model
+            elif not hasattr(self, '_embedding_model'):
+                # CRITICAL: Use explicit device='cpu' to avoid PyTorch meta tensor issues
+                # The meta tensor error occurs when accelerate library lazy-loads on meta device
+                self._embedding_model = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
+                model = self._embedding_model
+            else:
+                model = self._embedding_model
+            
+            embedding = model.encode(text)
             
             # Add to cache with LRU eviction
             if len(self._embedding_cache) >= self._CACHE_MAX_SIZE:
@@ -347,16 +382,18 @@ class KnowledgeBase:
             return embedding
             
         except Exception as e:
-            print(f"[KNOWLEDGE] Embedding computation failed: {e}")
+            # More specific error logging for debugging
+            error_type = type(e).__name__
+            print(f"[KNOWLEDGE] Embedding computation failed ({error_type}): {e}")
             return None
     
     def tiered_recall_async(self, agent: str, query: str) -> RecallResult:
         """Perform tiered recall with parallel queries using ThreadPoolExecutor.
         
         Runs strategy, apocalypse, and raw run searches in parallel.
-        2x faster than sequential tiered_recall().
+        Uses single 2s total timeout for ALL queries (not 2s each).
         """
-        from concurrent.futures import as_completed
+        from concurrent.futures import wait, FIRST_EXCEPTION
         
         executor = self._get_executor()
         
@@ -365,10 +402,36 @@ class KnowledgeBase:
         apocalypse_future = executor.submit(self.search_apocalypse, agent, query, 3)
         runs_future = executor.submit(self.search_runs, query, agent, 3)
         
-        # Wait for all to complete
-        strategies = strategy_future.result()
-        apocalypse = apocalypse_future.result()
-        raw_runs = runs_future.result()
+        all_futures = [strategy_future, apocalypse_future, runs_future]
+        
+        # Wait for ALL with single 2s total timeout (not 2s each!)
+        done, not_done = wait(all_futures, timeout=2.0, return_when=FIRST_EXCEPTION)
+        
+        # Extract results from completed futures
+        strategies = []
+        apocalypse = []
+        raw_runs = []
+        
+        if strategy_future in done and not strategy_future.exception():
+            try:
+                strategies = strategy_future.result(timeout=0)
+            except Exception:
+                pass
+        
+        if apocalypse_future in done and not apocalypse_future.exception():
+            try:
+                apocalypse = apocalypse_future.result(timeout=0)
+            except Exception:
+                pass
+        
+        if runs_future in done and not runs_future.exception():
+            try:
+                raw_runs = runs_future.result(timeout=0)
+            except Exception:
+                pass
+        
+        if not_done:
+            print(f"[KNOWLEDGE] {len(not_done)} queries timed out (2s total)")
         
         return RecallResult(
             strategies=strategies,

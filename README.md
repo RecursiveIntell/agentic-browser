@@ -206,6 +206,18 @@ Actions are classified by risk level:
 - pip install only works in virtual environments (not system-wide)
 - Files outside home directory are restricted
 
+## ⚠️ Known Issues
+
+> **Note**: The GUI recently underwent a major refactoring. Some superficial bugs may be present and are being actively addressed.
+
+| Issue | Status | Workaround |
+|-------|--------|------------|
+| Result display shows "No Result" | Fixed | Update to latest |
+| Multi-image downloads incomplete | Fixed | Auto-scrolls between downloads |
+| Embedding model timeouts | Fixed | Uses `device='cpu'` explicitly |
+| OS commands bypass approval | Fixed | Safety check added |
+| Some GUI elements misaligned | In Progress | Use CLI for critical tasks |
+
 ## 🐛 Troubleshooting
 
 | Issue | Solution |

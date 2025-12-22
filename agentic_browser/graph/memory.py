@@ -281,13 +281,15 @@ class SessionStore:
         if not hasattr(self, '_embedding_model'):
             try:
                 from sentence_transformers import SentenceTransformer
-                # Use a small, fast model
-                self._embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+                # Use a small, fast model with explicit device to avoid meta tensor issues
+                # The meta tensor error occurs when PyTorch accelerate lazy-loads on meta device
+                self._embedding_model = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
             except ImportError:
                 print("⚠️ sentence-transformers not installed. Semantic search disabled.")
                 self._embedding_model = None
             except Exception as e:
-                print(f"⚠️ Error loading embedding model: {e}")
+                error_type = type(e).__name__
+                print(f"⚠️ Error loading embedding model ({error_type}): {e}")
                 self._embedding_model = None
         return self._embedding_model
 

@@ -163,6 +163,24 @@ Respond with JSON:
             'download', 'save', 'get image', 'get picture', 'find picture',
             'find image', 'picture of', 'image of', 'photo of'
         ])
+        
+        # === MULTI-IMAGE DETECTION ===
+        # Parse how many images the user wants (e.g., "download 2 pictures")
+        import re
+        required_images = 1  # Default to 1
+        image_count_patterns = [
+            r'(\d+)\s*(?:pictures?|images?|photos?)',  # "2 pictures", "3 images"
+            r'(?:download|save|get)\s*(\d+)',  # "download 2", "save 3"
+        ]
+        for pattern in image_count_patterns:
+            match = re.search(pattern, goal_lower)
+            if match:
+                required_images = int(match.group(1))
+                required_images = max(1, min(required_images, 10))  # Cap at 10
+                break
+        
+        # Track how many images we've already downloaded
+        downloaded_count = state.get('browser_downloaded_image_count', 0)
 
         # Debug logging for auto-download conditions
         logger.debug(f"URL: {current_url[:80]}...")
@@ -209,23 +227,38 @@ Respond with JSON:
 
             logger.info(f"AUTO-DOWNLOAD TRIGGERED! step={step_count}, executing download_image")
             logger.info(f"Auto-download: images page detected, goal involves images, step {step_count}")
+            logger.info(f"Progress: {downloaded_count}/{required_images} images downloaded")
 
             result = self._browser_tools.execute("download_image", {})
 
             if result.success:
                 download_path = result.data.get("path", "") if result.data else ""
-                logger.info(f"Auto-downloaded image to: {download_path}")
-                return self._update_state(
+                downloaded_count += 1
+                logger.info(f"Auto-downloaded image {downloaded_count}/{required_images} to: {download_path}")
+                
+                # Check if we've downloaded enough images
+                is_complete = downloaded_count >= required_images
+                
+                # If NOT complete, SCROLL to get different images into view
+                # This prevents downloading the same image repeatedly
+                if not is_complete:
+                    logger.info(f"Need {required_images - downloaded_count} more images - scrolling to find new images")
+                    scroll_result = self._browser_tools.execute("scroll", {"amount": 800})
+                    logger.info(f"Scrolled page to reveal new images: {scroll_result.success}")
+                
+                new_state = self._update_state(
                     state,
-                    messages=[AIMessage(content=f"Auto-downloaded image to: {download_path}")],
+                    messages=[AIMessage(content=f"Auto-downloaded image {downloaded_count}/{required_images} to: {download_path}")],
                     extracted_data={
-                        "downloaded_image": download_path,
-                        "image_filename": result.data.get("filename", "") if result.data else "",
+                        f"downloaded_image_{downloaded_count}": download_path,
+                        f"image_filename_{downloaded_count}": result.data.get("filename", "") if result.data else "",
                     },
-                    # Mark as complete since we downloaded the image
-                    task_complete=True,
-                    final_answer=f"Downloaded image to: {download_path}",
+                    task_complete=is_complete,
+                    final_answer=f"Downloaded {downloaded_count}/{required_images} images" if is_complete else None,
                 )
+                new_state['browser_downloaded_image_count'] = downloaded_count
+                
+                return new_state
             else:
                 # Download failed - increment counter and continue
                 failed_downloads += 1
@@ -233,6 +266,7 @@ Respond with JSON:
                 # Store failure count for next iteration
                 new_state = self._update_state(state, error=result.message)
                 new_state['browser_failed_download_count'] = failed_downloads
+                new_state['browser_downloaded_image_count'] = downloaded_count
                 return new_state
 
 

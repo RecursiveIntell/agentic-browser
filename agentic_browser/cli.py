@@ -141,6 +141,13 @@ Examples:
     )
     
     run_parser.add_argument(
+        "--no-memory",
+        action="store_true",
+        default=False,
+        help="Disable knowledge base lookups (Strategy Bank, Apocalypse) for faster startup",
+    )
+    
+    run_parser.add_argument(
         "--vision",
         action="store_true",
         default=False,

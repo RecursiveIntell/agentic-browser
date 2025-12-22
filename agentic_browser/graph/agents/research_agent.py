@@ -485,8 +485,11 @@ Data collected (summary):
             goal = state['goal']
             cache_key = hashlib.md5(goal.encode()).hexdigest()[:16]
             
+            # Skip if --no-memory flag is set for faster startup
+            if getattr(self.config, 'no_memory', False):
+                recall_context = ""
             # Check cache first (fast path)
-            if cache_key in self._recall_cache:
+            elif cache_key in self._recall_cache:
                 recall_context = self._recall_cache[cache_key]
                 print("[RESEARCH] 🧠 Using cached tiered recall context")
             else:
@@ -494,7 +497,7 @@ Data collected (summary):
                     from ..knowledge_base import get_knowledge_base
                     kb = get_knowledge_base()
                     
-                    # Use parallel version for 2x faster queries
+                    # Use parallel version with 2s total timeout
                     recall_result = kb.tiered_recall_async("research", goal)
                     recall_context = recall_result.to_prompt_injection()
                     

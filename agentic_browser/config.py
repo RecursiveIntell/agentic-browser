@@ -92,6 +92,9 @@ class AgentConfig:
     # Browser fast mode - blocks images, fonts, media for faster page loads
     browser_fast_mode: bool = False
     
+    # No memory mode - skips knowledge base lookups for faster startup
+    no_memory: bool = False
+    
     # Debug mode - enables verbose logging (off by default)
     debug: bool = field(
         default_factory=lambda: os.getenv("AGENTIC_BROWSER_DEBUG", "").lower() in ("1", "true", "yes")
@@ -197,6 +200,7 @@ class AgentConfig:
         enable_tracing: bool = False,
         gui_ipc: bool = False,
         browser_fast_mode: bool = False,
+        no_memory: bool = False,
     ) -> "AgentConfig":
         """Create configuration from CLI arguments."""
         return cls(
@@ -212,6 +216,7 @@ class AgentConfig:
             enable_tracing=enable_tracing,
             gui_ipc=gui_ipc,
             browser_fast_mode=browser_fast_mode,
+            no_memory=no_memory,
         )
 
 

@@ -137,6 +137,41 @@ EXPLORATION STRATEGY:
             action = action_data.get("action", "")
             args = action_data.get("args", {})
             
+            # === SAFETY CHECK: Block destructive commands without approval ===
+            from ..safety import GraphSafetyChecker, RiskLevel
+            safety_checker = GraphSafetyChecker()
+            risk_level, reason, requires_approval = safety_checker.check_action(action, args, domain="os")
+            
+            # Check if action is blocked entirely (denylist)
+            if safety_checker.classifier.is_blocked(action, args):
+                return self._update_state(
+                    state,
+                    messages=[AIMessage(content=f"BLOCKED: {reason}")],
+                    error=f"Action blocked by safety system: {reason}",
+                )
+            
+            # If HIGH or MEDIUM risk, require approval
+            if requires_approval:
+                # Check if already approved
+                action_key = f"{action}:{hash(str(args))}"
+                if action_key not in state.get("approved_actions", []):
+                    # Set pending approval and return - DO NOT EXECUTE
+                    print(f"[OS-AGENT] ⚠️ Action requires approval: {action} (risk: {risk_level.value})")
+                    print(f"[OS-AGENT] Reason: {reason}")
+                    
+                    return self._update_state(
+                        state,
+                        messages=[AIMessage(content=f"⚠️ Action requires approval: {action}\nRisk: {risk_level.value}\nReason: {reason}")],
+                        pending_approval={
+                            "action": action,
+                            "args": args,
+                            "risk_level": risk_level.value,
+                            "reason": reason,
+                        },
+                    )
+                else:
+                    print(f"[OS-AGENT] ✅ Action already approved: {action}")
+            
             # For os_exec, prefer typed execution with argv
             if action == "os_exec":
                 # Convert cmd to argv if needed (backward compatibility)

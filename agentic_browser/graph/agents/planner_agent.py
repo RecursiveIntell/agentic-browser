@@ -125,19 +125,21 @@ Output as JSON:
             # We'll just run a background search for relevant history automatically and inject it into context.
             
             # TIERED RECALL INJECTION (Strategies > Apocalypse > Raw Runs)
+            # Skip if --no-memory flag is set for faster startup
             history_context = ""
-            try:
-                from ..knowledge_base import get_knowledge_base
-                kb = get_knowledge_base()
-                recall_result = kb.tiered_recall("planner", goal)
-                history_context = recall_result.to_prompt_injection()
-                
-                if history_context:
-                    context += f"\n\n{history_context}"
-                    messages = self._build_messages(state, context)  # Rebuild with history
-                    print("[PLANNER] 🧠 Injected tiered recall context")
-            except Exception as e:
-                print(f"[PLANNER] ⚠️ Tiered recall failed: {e}")
+            if not getattr(self.config, 'no_memory', False):
+                try:
+                    from ..knowledge_base import get_knowledge_base
+                    kb = get_knowledge_base()
+                    recall_result = kb.tiered_recall_async("planner", goal)
+                    history_context = recall_result.to_prompt_injection()
+                    
+                    if history_context:
+                        context += f"\n\n{history_context}"
+                        messages = self._build_messages(state, context)
+                        print("[PLANNER] 🧠 Injected tiered recall context")
+                except Exception as e:
+                    print(f"[PLANNER] ⚠️ Tiered recall failed: {e}")
             
             response = self.safe_invoke(messages)
             

@@ -411,17 +411,28 @@ class BrowserViewport(QLabel):
         self.setMinimumSize(400, 300)
     
     def update_screenshot(self, screenshot_bytes: bytes):
-        """Update the viewport with a new screenshot."""
-        pixmap = QPixmap()
-        pixmap.loadFromData(screenshot_bytes)
+        """Update the viewport with a new screenshot.
         
-        # Scale to fit while maintaining aspect ratio
-        scaled = pixmap.scaled(
-            self.size(),
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation
-        )
-        self.setPixmap(scaled)
+        Optimized to prevent GUI blocking:
+        - Uses FastTransformation instead of SmoothTransformation
+        - Limits update frequency (throttled in agent_thread)
+        - Wrapped in try/except to prevent crashes
+        """
+        try:
+            pixmap = QPixmap()
+            if not pixmap.loadFromData(screenshot_bytes):
+                return  # Skip if load fails
+            
+            # Scale to fit while maintaining aspect ratio
+            # Using FastTransformation (not Smooth) to reduce GUI blocking
+            scaled = pixmap.scaled(
+                self.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.FastTransformation  # Much faster than Smooth
+            )
+            self.setPixmap(scaled)
+        except Exception as e:
+            print(f"[GUI] Screenshot update error: {e}")
     
     def show_url(self, url: str):
         """Show URL when no screenshot is available."""

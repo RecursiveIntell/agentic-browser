@@ -409,25 +409,83 @@ class MultiAgentRunner:
         self._registry.unregister(self.session_id)
     
     def get_result(self, state: dict) -> str:
-        """Extract final answer from state.
+        """Extract final answer from state with comprehensive fallbacks.
         
         Args:
             state: Final state dict
             
         Returns:
-            Final answer string
+            Final answer string - synthesized from available data
         """
+        # 1. Direct final_answer (highest priority)
         if state.get("final_answer"):
             return state["final_answer"]
         
-        if state.get("extracted_data"):
-            import json
-            return f"Collected data: {json.dumps(state['extracted_data'], indent=2)}"
+        # 2. Check extracted_data for meaningful content
+        extracted = state.get("extracted_data", {})
+        if extracted:
+            results = []
+            
+            # Downloaded images
+            download_keys = [k for k in extracted.keys() if 'download' in k.lower()]
+            if download_keys:
+                for k in download_keys:
+                    if 'filename' not in k:  # Skip filename keys
+                        results.append(f"📥 Downloaded: {extracted[k]}")
+            
+            # Research findings
+            research_keys = [k for k in extracted.keys() if 'research' in k.lower()]
+            if research_keys:
+                findings = [extracted[k] for k in research_keys if extracted[k]]
+                if findings:
+                    # Summarize if too long
+                    combined = "\n\n".join(str(f)[:500] for f in findings[:3])
+                    results.append(f"📚 Research findings:\n{combined}")
+            
+            # Browser findings
+            browser_keys = [k for k in extracted.keys() if 'browser' in k.lower()]
+            if browser_keys:
+                for k in browser_keys:
+                    if extracted[k]:
+                        results.append(f"🌐 Browser: {str(extracted[k])[:300]}")
+            
+            # OS findings
+            os_keys = [k for k in extracted.keys() if 'os_' in k.lower()]
+            if os_keys:
+                for k in os_keys:
+                    if extracted[k]:
+                        results.append(f"💻 OS: {str(extracted[k])[:300]}")
+            
+            # Implementation plan summary
+            if "implementation_plan" in extracted:
+                plan = extracted["implementation_plan"]
+                if isinstance(plan, dict):
+                    results.append(f"📋 Plan: {plan.get('goal_analysis', 'Created execution plan')}")
+            
+            # Generic fallback for any other data
+            if not results:
+                import json
+                return f"Collected data:\n{json.dumps(extracted, indent=2)[:2000]}"
+            
+            return "\n\n".join(results)
         
-        # Fall through to check for results in messages
+        # 3. Check last few messages for useful content
         messages = state.get("messages", [])
         if messages:
-            return str(messages[-1].content) if hasattr(messages[-1], 'content') else str(messages[-1])
-        return "No result"
+            # Look at last few messages for AI responses with substance
+            for msg in reversed(messages[-5:]):
+                content = msg.content if hasattr(msg, 'content') else str(msg)
+                # Skip empty or very short messages
+                if content and len(content) > 50:
+                    # Skip tool output messages
+                    if not content.startswith("Tool output:"):
+                        return content[:2000]
+        
+        # 4. Check for task completion indicators
+        if state.get("task_complete"):
+            step_count = state.get("step_count", 0)
+            return f"Task completed after {step_count} steps (no explicit result captured)"
+        
+        return "No result (task may not have completed)"
     
 

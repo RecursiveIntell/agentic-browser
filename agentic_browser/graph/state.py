@@ -116,11 +116,12 @@ class AgentState(TypedDict):
     # Runtime Tracking (Browser Agent Loop Detection)
     # These fields support internal loop detection and URL-change tracking
     # ========================================================================
-    browser_failed_download_count: int   # Track download failures for fallback logic
-    browser_recent_actions: list[str]    # Track recent actions for loop detection
-    browser_failed_nav_clicks: int       # Track clicks that didn't navigate
-    browser_same_page_actions: int       # Count actions on same page
-    browser_last_page_base: str          # Last page URL base for comparison
+    browser_failed_download_count: int    # Track download failures for fallback logic
+    browser_downloaded_image_count: int   # Track successful downloads for multi-image goals
+    browser_recent_actions: list[str]     # Track recent actions for loop detection
+    browser_failed_nav_clicks: int        # Track clicks that didn't navigate
+    browser_same_page_actions: int        # Count actions on same page
+    browser_last_page_base: str           # Last page URL base for comparison
 
 
 def create_initial_state(
@@ -173,6 +174,7 @@ def create_initial_state(
 
         # Browser runtime tracking (loop detection)
         browser_failed_download_count=0,
+        browser_downloaded_image_count=0,
         browser_recent_actions=[],
         browser_failed_nav_clicks=0,
         browser_same_page_actions=0,
